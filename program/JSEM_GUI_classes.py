@@ -2351,7 +2351,7 @@ class JSEM_WeatherIcon(JSEM_GUI, Container):
 		frcst = frcst.iloc[::self.config['interval'], :]
 		
 		# print(frcst)
-		self.legend.set_text(f'{self.start_dt.strftime("%A %-d %B")}')
+		self.legend.set_text(f'{self.start_dt.strftime("%A %d %B")}')
 		if not self.config['svg_images']:
 			for teller, img in enumerate(self.img_list):
 				value = frcst.iloc[teller]['frcst_icoon']

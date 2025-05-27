@@ -79,7 +79,7 @@ def From_BINSTR(data):
 		for x in data:
 			result += bin(x)[2:] + ' '
 		return result.strip()
-	except:
+	except Exception as err:
 		Logger.exception(str(err))
 		return None
 	
@@ -87,7 +87,7 @@ def From_HEXSTR(data):
 	try:
 		# data is een bytearray van 0 of meer bytes:
 		return ByteArrayToHexString(data)
-	except:
+	except Exception as err:
 		Logger.exception(str(err))
 		return None
 	
@@ -114,7 +114,7 @@ def To_BCD(num):
 		if num > 99 or num < 0:
 			raise Exception("Invalid ToBCD conversion: Input = " + str(num))
 		else:
-			lownibble = Num % 10
+			lownibble = num % 10
 			highnibble = (num - (num % 10)) / 10
 			return (highnibble << 4) + lownibble
 	except Exception as err:
@@ -137,7 +137,7 @@ def To_DATA1B(num):
 			raise Exception("Invalid ToData1B conversion: Input = " + str(num))
 		else:
 			if num < 0:
-				return (128 + Num) + 128
+				return (128 + num) + 128
 			else:
 				return num
 	except Exception as err:
