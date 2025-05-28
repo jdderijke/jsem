@@ -228,20 +228,20 @@ if __name__ == "__main__":
 	Logger.info ("Initializing Zonnepanelen - DeltaSolivia")
 	DeltaInterface(name="Zonnepanelen", auto_start=True)
 
-	# Logger.info ("Initializing Slimmemeter - ESMR 5.0")
-	# ESMR50Interface(name="Slimmemeter", auto_start=True)
-	#
-	# Logger.info ("Initializing Vermogensmeters - M_bus")
-	# MbusInterface(name="Vermogensmeters", auto_start=True)
-	#
+	Logger.info ("Initializing Slimmemeter - ESMR 5.0")
+	ESMR50Interface(name="Slimmemeter", auto_start=True)
+
+	Logger.info ("Initializing Vermogensmeters - M_bus")
+	MbusInterface(name="Vermogensmeters", auto_start=True)
+
 	Logger.info ("Initializing laadpaal - Modbus")
 	SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
 	#
 	# Logger.info ("Initializing SDM72 verm meter - Modbus")
 	# SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
-	#
-	# Logger.info ("Initializing Zwembadpomp - Shelly")
-	# ShellyRelayInterface(name="Zwembadpomp", device_count=3, auto_start=True)
+
+	Logger.info ("Initializing Zwembadpomp - Shelly")
+	ShellyRelayInterface(name="Zwembadpomp", device_count=3, auto_start=True)
 
 	Logger.info ("Loading datapoints definitions")
 	load_and_configure_datapoints()

@@ -982,7 +982,7 @@ class JSEM_Map_Chart(gui.TableWidget):
 			row_headers = ["uur %s" % x for x in range(6)] if self.rowheaders is None else (self.rowheaders + 6*[""])[:6]
 		elif self.dataselection in [DataSelection._2hr]: 
 			row_headers = ["uur %s" % x for x in range(2)] if self.rowheaders is None else (self.rowheaders + 2*[""])[:2]
-		elif self.dataselection in [DataSelection.Hour, DataSelection._1hr]: 
+		elif self.dataselection in [DataSelection._1hr]:
 			row_headers = [""]
 		elif self.dataselection in [DataSelection.Week]: 
 			row_headers = ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"] if self.rowheaders is None else (self.rowheaders + 7*[""])[:7]

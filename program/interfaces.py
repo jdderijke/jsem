@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup
 from Conversion_Routines import ByteArrayToHexString, From_ByteArray_converter, To_ByteArray_converter, \
 	HexStringToByteArray
 from DataPoint import Datapoint
-from Emulators import TCPUDP_Emulator, TCPModbus_Emulator
+from Emulators import TCPUDP_Emulator, TCPModbus_Emulator, Serial_Emulator, Shelly_Emulator
 from LogRoutines import Logger
 from DB_Routines import populate_interface, get_pollmessages_from_database
 # import Conversion_Routines
@@ -340,7 +340,7 @@ class BaseInterface(object):
 					except Exception as err:
 						time.sleep(0.5)
 						
-			elif self.conn_type in ["EBUS-UDP"]:
+			elif self.conn_type in ["EBUS-UDP", "MBUS-UDP"]:
 				# declare our serverSocket upon which we will be listening for UDP messages
 				if ENVIRONMENT == Environment.Test_full:
 					self.UDPclientSock = TCPUDP_Emulator(busfree_byte=self.bus_free, echo=True)
@@ -375,7 +375,10 @@ class BaseInterface(object):
 						
 			elif self.conn_type == "P1-SERIAL":
 				# Configure serial Com port
-				self.Ser = serial.Serial()
+				if ENVIRONMENT == Environment.Test_full:
+					self.Ser = Serial_Emulator()
+				else:
+					self.Ser = serial.Serial(baudrate=self.baudrate, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE)
 				self.Ser.baudrate = self.baudrate
 				self.Ser.bytesize=getattr(serial,self.bytesize)
 				self.Ser.parity=getattr(serial,self.parity)
@@ -397,7 +400,10 @@ class BaseInterface(object):
 			elif self.conn_type == "SHELLY-TCP":
 				# define a new Shelly interface
 				for tries in range(self.maxretries):
-					self.Shelly = pyShelly()
+					if ENVIRONMENT == Environment.Test_full:
+						self.Shelly = Shelly_Emulator()
+					else:
+						self.Shelly = pyShelly()
 					try:
 						self.Shelly.start()
 						# self.shelly.discover()
@@ -417,7 +423,7 @@ class BaseInterface(object):
 							# Finish, fill up the pbar to 100%
 							pbar.update(self.timeout - total_time)
 							
-						Logger.debug(f'Found the following devices on address {self.address}: {[x.device_type for x in self.Shelly.devices]}')
+						Logger.info(f'Found the following devices on address {self.address}: {[x.device_type for x in self.Shelly.devices]}')
 						self.connstate = ConnState.Connected
 						break
 					except Exception as err:
@@ -996,13 +1002,13 @@ class ShellyRelayInterface(BaseInterface):
 
 
 	def send(self, device_index, nwvalue:bool):
-		if ENVIRONMENT != Environment.Productie:
-			return
+		if ENVIRONMENT not in [Environment.Productie, Environment.Test_full]: return
 		
 		if self.connstate != ConnState.Connected:
-			Logger.error(f'{self.name}-- Trying to call send while not connected, first connect!')
+			Logger.error(f'{self.name}-- Trying to call receive while not connected, first connect!')
 			return
 		
+		self.sndstate = Sndstate.Sending_Msg
 		device_type = self.Shelly.devices[device_index].device_type.upper()
 		if device_type == 'RELAY':
 			if nwvalue:
@@ -1014,17 +1020,19 @@ class ShellyRelayInterface(BaseInterface):
 				self.update_MON_widget(
 					f'Device {device_index}--{self.conn_type}-{self.address}:{self.port}, type {device_type}, switched to {"ON" if nwvalue else "OFF"}. ',
 					style=self.send_style)
-					
+
+		time.sleep(0.2)
+		self.sndstate = Sndstate.Waiting_For_MsgToSend
 	
 	
 	def recv(self, device_index, polling_dp):
-		if ENVIRONMENT != Environment.Productie:
-			return
+		if ENVIRONMENT not in [Environment.Productie, Environment.Test_full]: return
 		
 		if self.connstate != ConnState.Connected:
-			Logger.error(f'{self.name}-- Trying to call send while not connected, first connect!')
+			Logger.error(f'{self.name}-- Trying to call receive while not connected, first connect!')
 			return
 		
+		self.recstate = Recstate.Receiving_Msg
 		device_type = self.Shelly.devices[device_index].device_type.upper()
 		if device_type in ['RELAY', 'SWITCH']:
 			state = int(self.Shelly.devices[device_index].state)
@@ -1032,7 +1040,8 @@ class ShellyRelayInterface(BaseInterface):
 			self.update_MON_widget(
 				f'Device {device_index}--{self.conn_type}-{self.address}:{self.port}, type {device_type}, state {state}. ',
 				style=self.dp_style)
-				
+		time.sleep(0.2)
+		self.recstate = Recstate.Waiting_For_MsgToReceive
 
 
 class DeltaInterface(BaseInterface):
@@ -1338,7 +1347,7 @@ class MbusInterface(BaseInterface):
 		localecho_send_messages  - geeft aan of VERZONDEN messages zoals POLLS en COMMANDS locaal in de interfacemonitor ge-echo'd moeten worden
 		'''
 		# self.sync_hex = ""
-		# self.busfree_hex = ""
+		self.bus_free = bytearray([])
 		# self.ack_hex = ""
 		# self.cmd_ack_hex = ""
 		
@@ -1376,13 +1385,7 @@ class MbusInterface(BaseInterface):
 
 
 	def send(self):
-		if ENVIRONMENT != Environment.Productie:
-			if ENVIRONMENT == Environment.Test_full:
-				sendbytes, ack_recv, msgtype = self.get_nxtmsg()
-				Logger.info(f'{self.name}-- Send message {sendbytes}, messagetype {msgtype}')
-				if self.localecho_send_messages: self.update_MON_widget(sendbytes, style=self.send_style)
-			return
-		
+		# Trying to send something while not connected?...
 		if self.connstate != ConnState.Connected:
 			Logger.error(f'{self.name}-- Trying to call send while not connected, first connect!')
 			return
@@ -1413,18 +1416,13 @@ class MbusInterface(BaseInterface):
 
 		
 	def recv(self):
-		self.stop_receiving = False
-		if ENVIRONMENT != Environment.Productie:
-			if ENVIRONMENT == Environment.Test_full:
-				while not self.stop_receiving:
-					if self.msgQ: self.send()
-					time.sleep(0.2)
-			return
+		if ENVIRONMENT not in [Environment.Productie, Environment.Test_full]: return
 		
 		if self.connstate != ConnState.Connected:
 			Logger.error(f'{self.name}-- Trying to call receive while not connected, first connect!')
 			return
-		
+			
+		self.stop_receiving = False
 		TCP_BUFFER_SIZE = 1024
 		UDP_BUFFER_SIZE = 4096
 		data = ""
@@ -1646,15 +1644,7 @@ class EbusInterface(BaseInterface):
 		if self.connstate != ConnState.Connected:
 			Logger.error(f'{self.name}-- Trying to call send while not connected, first connect!')
 			return
-		
-		# if ENVIRONMENT != Environment.Productie:
-		# 	if ENVIRONMENT == Environment.Test_full:
-		# 		sendbytes, ack_recv, msgtype = self.get_nxtmsg()
-		# 		Logger.info(f'{self.name}-- Send message {sendbytes}, messagetype {msgtype}')
-		# 		if self.localecho_send_messages: self.update_MON_widget(sendbytes, style=self.send_style)
-		# 	return
 			
-		
 		BUFFER_SIZE = 1
 		sendbytes, ack_recv, msgtype = self.get_nxtmsg()
 		if sendbytes is not None:
@@ -2078,13 +2068,12 @@ class ESMR50Interface(BaseInterface):
 		'''
 		Specifiek een kleine receiver voor ESMR, alleen voor serieel, niet UDP of TCP op dit moment
 		'''
-		if ENVIRONMENT != Environment.Productie:
-			return
-
+		if ENVIRONMENT not in [Environment.Productie, Environment.Test_full]: return
+		
 		if self.connstate != ConnState.Connected:
 			Logger.error(f'{self.name}-- Trying to call receive while not connected, first connect!')
 			return
-			
+		
 		try:
 			# clean the buffer before we start
 			self.Ser.flushInput()
@@ -2093,6 +2082,7 @@ class ESMR50Interface(BaseInterface):
 				self.recstate=Recstate.Waiting_For_MsgToReceive
 				
 				data = self.Ser.readline() # data is van <class Bytes>
+				if data is None: continue
 				
 				# print(self.Ser.in_waiting,":",data)
 				if data[0:1] == b'!':

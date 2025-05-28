@@ -1,3 +1,4 @@
+import datetime
 import time
 import sdm_modbus
 
@@ -104,8 +105,118 @@ class TCPModbus_Emulator(object):
 		
 	def write(self, registername, value):
 		if registername == self.awake_registername:
-			print (f'Awake_register pinged with value {value}')
+			# print (f'Awake_register pinged with value {value}')
+			pass
+
+
+
+
+# import serial
+# from datetime import datetime
+
+class Serial_Emulator(object):
+	esmr50_sample = """/Ene5\T211 ESMR 5.0 1-3:0.2.8(50)
+	0-0:1.0.0(250528103113S)
+	0-0:96.1.1(4530303632303030303033313336373231)
+	1-0:1.8.1(022829.455*kWh)
+	1-0:1.8.2(012399.513*kWh)
+	1-0:2.8.1(001992.935*kWh)
+	1-0:2.8.2(004507.887*kWh)
+	0-0:96.14.0(0002)
+	1-0:1.7.0(00.721*kW)
+	1-0:2.7.0(01.519*kW)
+	0-0:96.7.21(00015)
+	0-0:96.7.9(00009)
+	1-0:99.97.0(2)(0-0:96.7.19)(240507143439S)(0000000801*s)(221118121252W)(0000000404*s)
+	1-0:32.32.0(00003)
+	1-0:52.32.0(00004)
+	1-0:72.32.0(00003)
+	1-0:32.36.0(00004)
+	1-0:52.36.0(01912)
+	1-0:72.36.0(00521)
+	0-0:96.13.0()
+	1-0:32.7.0(243.0*V)
+	1-0:52.7.0(245.0*V)
+	1-0:72.7.0(240.0*V)
+	1-0:31.7.0(000*A)
+	1-0:51.7.0(006*A)
+	1-0:71.7.0(003*A)
+	1-0:21.7.0(00.013*kW)
+	1-0:41.7.0(00.000*kW)
+	1-0:61.7.0(00.708*kW)
+	1-0:22.7.0(00.000*kW)
+	1-0:42.7.0(01.519*kW)
+	1-0:62.7.0(00.000*kW)
+	0-1:24.1.0(003)
+	0-1:96.1.0(4730303538353330303432353538383230)
+	0-1:24.2.1(250528103000S)(00273.506*m3)
+	!
+	"""
+	
+	def __init__(self):
+		self.baudrate = 115200
+		self.bytesize = 8
+		self.parity = 'N'
+		self.stopbits = 1
+		self.xonxoff = 0
+		self.rtscts = 0
+		self.timeout = 20
+		# bit confusing but with port a serial COM port is expected, i.e. /dev/ttyUSB0...
+		self.port = '/dev/ttyUSB0'
+		self.is_open = False
+		self.gen = self.generator()
+		self.keep_generating = False
 		
+	def open(self):
+		self.is_open=True
+		self.keep_generating = True
+		
+	def close(self):
+		self.is_open=False
+		self.keep_generating = False
+
+	def readline(self):
+		if self.is_open:
+			try:
+				time.sleep(0.1)
+				result = next(self.gen)
+				return result
+			except StopIteration:
+				time.sleep(1.0)
+				self.flushInput()
+		else:
+			raise ConnectionError('Serial connection is not open')
+	
+	def flushInput(self):
+		self.gen = self.generator()
+	
+	def generator(self):
+		for teller, line in enumerate(Serial_Emulator.esmr50_sample.splitlines()):
+			# Yield a bytes object
+			result =  bytes(line, 'utf-8')
+			yield result
+
+
+class device():
+	def __init__(self, device_type):
+		self.device_type = device_type
+		self.state = 0
+		
+	def turn_on(self):
+		self.state = 1
+	
+	def turn_off(self):
+		self.state = 0
+
+class Shelly_Emulator(object):
+	def __init__(self):
+		self.devices = []
+	
+	def start(self):
+		pass
+	
+	def add_device_by_ip(self, id, src):
+		self.devices = [device('RELAY'), device('SWITCH'), device('SWITCH')]
 	
 	
 	
@@ -118,15 +229,35 @@ def ByteArrayToHexString(ByteArray):
 	return result
 
 
+
 if __name__ == '__main__':
-	test = TCPUDP_Emulator(echo=True)
-	test.setblocking(False)
-	test.send(bytearray([0xFF, 0xBA, 0xBB]))
-	try:
-		while True:
-			print(ByteArrayToHexString(test.recv(1)))
-			input('any key..')
-	except IOError as err:
-		print (f'IOError with errno: {err.errno}')
+	
+	# Test Serial_Emulator
+	print ('Cntrl-C to flush inputbuffer (reset), cntrl-C twice to exit...')
+	print ()
+	test = Serial_Emulator()
+	test.open()
+	while True:
+		try:
+			print(f'>>>>> {test.readline()}')
+		except KeyboardInterrupt:
+			try:
+				test.flushInput()
+				time.sleep(0.5)
+			except KeyboardInterrupt:
+				break
+	test.close()
+	
+	
+	# # TCPUDP_Emulator test
+	# test = TCPUDP_Emulator(echo=True)
+	# test.setblocking(False)
+	# test.send(bytearray([0xFF, 0xBA, 0xBB]))
+	# try:
+	# 	while True:
+	# 		print(ByteArrayToHexString(test.recv(1)))
+	# 		input('any key..')
+	# except IOError as err:
+	# 	print (f'IOError with errno: {err.errno}')
 		
-		
+	pass
