@@ -403,15 +403,9 @@ def Instellingen(DataCont:Container, ChartCont:VBox, my_app):
 			
 	def interf_poll_Q_button_clicked(pollQbutton, interf):
 		if interf.POLLQ_widget is None:
-			pollQ_widget = VBox()
-			set_css_defaults(pollQ_widget, width="80%", height="95%")
-			pollQ_widget.css_margin="5px"
-			pollQ_widget.css_font_family = "Courier New"
-			pollQ_widget.css_overflow = "auto"
-			pollQ_widget.css_font_size = "%spx" % (15)
-			pollQ_widget.css_align_items = "flex-start"
-			pollQ_widget.css_justify_content = "flex-start"
-			pollQ_widget.css_flex_wrap ="nowrap"
+			pollQ_widget = VBox(style='width:80%; height:95%; overflow:auto; '\
+										'align-items:flex-start; justify-content:flex-start; flex-wrap:nowrap; '\
+								  		'margin:5px; font-family:Courier New; font-size:15px')
 			ChartCont.append(pollQ_widget, interf.name + "_pollQ")
 			interf.POLLQ_widget = pollQ_widget
 			interf.update_POLLQ_widget()
@@ -429,23 +423,13 @@ def Instellingen(DataCont:Container, ChartCont:VBox, my_app):
 	def interf_monitorbutton_clicked(monitorbutton, pausebutton, interf):
 		if interf.MON_widget is None:
 			if interf.display_format.upper() in ['ASCII', 'TEXT']:
-				mon_widget = VBox()
-				set_css_defaults(mon_widget, width="80%", height="95%")
-				mon_widget.style['overflow-x'] = "hidden"
-				mon_widget.style['overflow-y'] = "auto"
-				mon_widget.style['align-items'] = "flex-start"
-				mon_widget.style['justify-content'] = "flex-start"
-				mon_widget.css_flex_wrap ="nowrap"
-				# mon_widget.style["overflow-y"]="scroll"
+				mon_widget = VBox(style='width:80%; height:95%; overflow-x:hidden; overflow-y:auto; '\
+										'align-items:flex-start; justify-content:flex-start; flex-wrap:nowrap; '\
+								  		'margin:5px; font-family:Courier New; font-size:15px')
 			elif interf.display_format.upper() in ['HEX']:
-				mon_widget = Container()
-				set_css_defaults(mon_widget, width="80%", height="95%")
-				mon_widget.css_overflow = "auto"
-				# mon_widget.style["overflow-y"]="scroll"
+				mon_widget = Container(style=	'width:80%; height:95%; overflow:auto; '
+												'margin:5px; font-family:Courier New; font-size:15px')
 				
-			mon_widget.css_margin="5px"
-			mon_widget.css_font_family = "Courier New"
-			mon_widget.css_font_size = "%spx" % (15)
 			ChartCont.append(mon_widget, interf.name + "_monitor")
 			mon_widget.attributes["is_updating"]=True
 			interf.MON_widget = mon_widget

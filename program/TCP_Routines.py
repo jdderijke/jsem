@@ -4,7 +4,6 @@ if __name__ == "__main__":
 	__main__.backupcount = 2
 import os
 import sys
-print("hello")
 from Config import DBFILE, TCPPORT, TCPHOST, MAX_EXTERNAL_CONN, DB_RETRIES, DB_WAITBETWEENRETRIES
 import Common_Data
 from Common_Routines import get_ip_address

@@ -1,10 +1,25 @@
 import datetime
 import time
 import sdm_modbus
+import socket as prod_socket
 
+from Config import ENVIRONMENT
+from Common_Enums import *
 
-class TCPUDP_Emulator(object):
+class Socket(prod_socket.socket):
+	"""
+	In normal operation (ENVIRONMENT=Productie) this socket is just a regular socket.socket instance
+	In full test operation (ENVIRONMENT=Test_full) this socket EMULATES a socket.socket instance
+	"""
+	AF_INET = prod_socket.AF_INET
+	SOCK_STREAM = prod_socket.SOCK_STREAM
+	SOCK_DGRAM = prod_socket.SOCK_DGRAM
+	SHUT_RDWR = prod_socket.SHUT_RDWR
+	
 	def __init__(self, *args, **kwargs):
+		if ENVIRONMENT == Environment.Productie:
+			super().__init__(*args)
+		
 		self.blocking = True
 		self.busfree_byte = kwargs.get('busfree_byte', bytearray([]))
 		self.baudrate = kwargs.get('baudrate', 200)
@@ -72,15 +87,19 @@ class TCPUDP_Emulator(object):
 	
 	def sendto(self, sendbytes, *args, **kwargs):
 		self.send(sendbytes)
-		
-	
-	
-class TCPModbus_Emulator(object):
+
+class Modbus(object):
 	def __init__(self,	**kwargs):
-		self.awake_registername = kwargs.get('awake_registername', None)
+		self.awake_registername = kwargs.pop('awake_registername', None)
+		if ENVIRONMENT == Environment.Productie:
+			initializer = getattr(sdm_modbus, kwargs.pop('device_type'))
+			initializer(**kwargs)
+			return
+		
 		self.is_connected = True
 		self.input_registers = {'inp_1':1, 'inp_2':2}
 		self.holding_registers = {'hol_1':11, 'hol_2':12}
+		
 	def close(self):
 		self.is_connected = False
 		
@@ -115,7 +134,18 @@ class TCPModbus_Emulator(object):
 # from datetime import datetime
 
 class Serial_Emulator(object):
-	esmr50_sample = """/Ene5\T211 ESMR 5.0 1-3:0.2.8(50)
+	dummy_sample = """This is sample transmission
+	Using the Serial Emulator
+	Emulating the esmr50 interface
+	This is NO real data
+	Since mimicking real data would lead to DB storage
+	of datapoints....
+	If you want to test with REAL data
+	then start the Serial_Emulator with the for_real=True
+	argument.
+	!
+	"""
+	esmr50_realdata_sample = """/Ene5\T211 ESMR 5.0 1-3:0.2.8(50)
 	0-0:1.0.0(250528103113S)
 	0-0:96.1.1(4530303632303030303033313336373231)
 	1-0:1.8.1(022829.455*kWh)
@@ -153,7 +183,8 @@ class Serial_Emulator(object):
 	!
 	"""
 	
-	def __init__(self):
+	def __init__(self, for_real=False):
+		self.for_real = for_real
 		self.baudrate = 115200
 		self.bytesize = 8
 		self.parity = 'N'
@@ -166,6 +197,7 @@ class Serial_Emulator(object):
 		self.is_open = False
 		self.gen = self.generator()
 		self.keep_generating = False
+		
 		
 	def open(self):
 		self.is_open=True
@@ -191,7 +223,8 @@ class Serial_Emulator(object):
 		self.gen = self.generator()
 	
 	def generator(self):
-		for teller, line in enumerate(Serial_Emulator.esmr50_sample.splitlines()):
+		sample = Serial_Emulator.esmr50_realdata_sample if self.for_real else Serial_Emulator.dummy_sample
+		for teller, line in enumerate(sample.splitlines()):
 			# Yield a bytes object
 			result =  bytes(line, 'utf-8')
 			yield result

@@ -2,7 +2,6 @@ import pathlib
 import sys
 import __main__
 
-from remi_addons import waitkey
 
 if __name__ == "__main__":
 	__main__.logfilename = "JSEM.log"
@@ -14,6 +13,8 @@ import JSEM_Rules
 
 
 import GUI_routines
+from GUI_routines import show_all
+from remi_addons import waitkey
 
 from TCP_Routines import TCPServer
 from JSEM_Rules import JSEM_Rule
@@ -157,8 +158,8 @@ def menubutton_clicked(clicked_button, DataCont, ChartCont, my_app, **kwargs):
 		buildscreen = getattr(GUI_routines, selected_menubutton.text)
 		buildscreen(DataCont, ChartCont, my_app)
 	else:
-		buildscreen = getattr(GUI_routines, "show_all")
-		buildscreen(DataCont, ChartCont, clicked_button.text, my_app)
+		# buildscreen = getattr(GUI_routines, "show_all")
+		show_all(DataCont, ChartCont, clicked_button.text, my_app)
 		
 	
 
@@ -236,9 +237,9 @@ if __name__ == "__main__":
 
 	Logger.info ("Initializing laadpaal - Modbus")
 	SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
-	#
-	# Logger.info ("Initializing SDM72 verm meter - Modbus")
-	# SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
+
+	Logger.info ("Initializing SDM72 verm meter - Modbus")
+	SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
 
 	Logger.info ("Initializing Zwembadpomp - Shelly")
 	ShellyRelayInterface(name="Zwembadpomp", device_count=3, auto_start=True)

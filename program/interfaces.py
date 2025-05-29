@@ -1,18 +1,11 @@
 
-# it may be necessary that a port is openened on the RPI, use ufw to do so...
-# The problem got solved by using the following commands:
-# sudo apt-get install ufw
-# sudo ufw allow 22
-# sudo ufw allow 8090
-# sudo ufw allow 8092
-# sudo ufw enable
-# sudo reboot
-
  
 from Config import MsgQ_Alarm, ENVIRONMENT
 from Common_Enums import *
 from enum import Enum
-import socket
+
+# import socket
+from Emulators import Socket, Modbus
 
 import threading
 import time
@@ -29,7 +22,7 @@ from bs4 import BeautifulSoup
 from Conversion_Routines import ByteArrayToHexString, From_ByteArray_converter, To_ByteArray_converter, \
 	HexStringToByteArray
 from DataPoint import Datapoint
-from Emulators import TCPUDP_Emulator, TCPModbus_Emulator, Serial_Emulator, Shelly_Emulator
+from Emulators import Serial_Emulator, Shelly_Emulator
 from LogRoutines import Logger
 from DB_Routines import populate_interface, get_pollmessages_from_database
 # import Conversion_Routines
@@ -327,10 +320,7 @@ class BaseInterface(object):
 			self.connstate = ConnState.Connecting
 			
 			if self.conn_type in ["EBUS-TCP", "MBUS-TCP", "RS485-TCP", "DEFAULT-TCP"]:
-				if ENVIRONMENT == Environment.Test_full:
-					self.TCPclientSock = TCPUDP_Emulator(busfree_byte=self.bus_free, echo=True)
-				else:
-					self.TCPclientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+				self.TCPclientSock = Socket(Socket.AF_INET, Socket.SOCK_STREAM, busfree_byte=self.bus_free, echo=True)
 				self.TCPclientSock.settimeout(self.timeout)
 				for tries in range(self.maxretries):
 					try:
@@ -341,11 +331,7 @@ class BaseInterface(object):
 						time.sleep(0.5)
 						
 			elif self.conn_type in ["EBUS-UDP", "MBUS-UDP"]:
-				# declare our serverSocket upon which we will be listening for UDP messages
-				if ENVIRONMENT == Environment.Test_full:
-					self.UDPclientSock = TCPUDP_Emulator(busfree_byte=self.bus_free, echo=True)
-				else:
-					self.UDPclientSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+				self.UDPclientSock = Socket(Socket.AF_INET, Socket.SOCK_DGRAM, busfree_byte=self.bus_free, echo=True)
 				self.UDPclientSock.settimeout(self.timeout)
 				for tries in range(self.maxretries):
 					try:
@@ -361,12 +347,8 @@ class BaseInterface(object):
 			elif self.conn_type == "MODBUS-TCP":
 				for tries in range(self.maxretries):
 					try:
-						if ENVIRONMENT == Environment.Test_full:
-							self.Modbus_Conn = TCPModbus_Emulator(awake_registername=self.awake_registername)
-						else:
-							initializer = getattr(sdm_modbus, self.device_type)
-							self.Modbus_Conn = initializer(host=self.address,port=self.port,timeout=self.timeout,framer=None,
-														   unit=self.device_sub_addr,udp=False)
+						self.Modbus_Conn = Modbus(device_type=self.device_type, host=self.address,port=self.port,timeout=self.timeout,framer=None,
+														   unit=self.device_sub_addr,udp=False, awake_registername=self.awake_registername)
 						self.connstate = ConnState.Connected
 						break
 					except Exception as err:
@@ -502,7 +484,7 @@ class BaseInterface(object):
 			try:
 				if conn_type in ["EBUS-TCP", "MBUS-TCP", "RS485-TCP", "DEFAULT-TCP"]:
 					# shutdown forces all processes to disconnect from the socket and sends an EOF to the peer, but you still need to close the socket
-					self.TCPclientSock.shutdown(socket.SHUT_RDWR)
+					self.TCPclientSock.shutdown(Socket.SHUT_RDWR)
 					self.TCPclientSock.close()
 					self.TCPclientSock=None
 				elif conn_type in ["EBUS-UDP"]:
@@ -858,7 +840,7 @@ class SdmModbusInterface(BaseInterface):
 					time.sleep(0.5)
 					continue
 
-				self.sndstate=Sndstate.Sending_Msg
+				self.sndstate = Sndstate.Sending_Msg
 				self.recstate = Recstate.Receiving_Msg
 				
 				result = {}
