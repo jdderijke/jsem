@@ -35,6 +35,7 @@ class DBstore_engine(object):
 		self.dbfile = kwargs.get("dbfile", None)
 		self.looptime = kwargs.get("looptime", DB_looptime)
 		self.alivetime = kwargs.get("alivetime", DB_alivetime)
+		self.status_widget = None
 		self.CONN = None
 		self.DBstore_Q = []
 		self.keeprunning=False
@@ -42,13 +43,13 @@ class DBstore_engine(object):
 		self.thrd = threading.Thread(target=self.start)
 		self.thrd.daemon = True
 		self.thrd.start()
-		Logger.info ("%s--DBstore_engine started with interval: %s s." % (self.name, self.looptime))
+		Logger.info (f'{self.name}--DBstore_engine started with interval: {self.looptime} s.')
 		
 	def connect(self):
 		try:
 			self.CONN=sqlite3.connect(self.dbfile)
 		except Exception as err:
-			Logger.error('%s--Can not establish connection to database %s ' % (self.name, self.dbfile))
+			Logger.error(f'{self.name}--Can not establish connection to database {self.dbfile}')
 			return False
 		return True
 		
@@ -61,9 +62,11 @@ class DBstore_engine(object):
 		while self.keeprunning:
 			try:
 				# print('dbstore_engine runs...')
+				if self.status_widget is not None:
+					self.status_widget.set_value(len(self.DBstore_Q))
 				if time.time() - start_time > self.alivetime:
 					start_time = time.time()
-					Logger.info('%s--I am still alive and kicking.. Max DBstore_Q size = %s' % (self.name, max_Q))
+					Logger.info(f'{self.name}--I am still alive and kicking.. Max DBstore_Q size = {max_Q}')
 					max_Q=0
 				while self.DBstore_Q:
 					max_Q = max(len(self.DBstore_Q), max_Q)
@@ -77,10 +80,10 @@ class DBstore_engine(object):
 							self.DBstore_Q.pop(0)
 							break
 						except Exception as err:
-							Logger.warning(f"{self.name}--Store failed, attempt:{teller+1} -- {err}")
+							Logger.warning(f'{self.name}--Store failed, attempt:{teller+1} -- {err}')
 							Logger.warning(f"Query: {query}")
 							if (teller + 1) == DB_RETRIES:
-								Logger.error(f"{self.name}--Store failed, max retries exceeded, re_adding query to queue ({len(self.DBstore_Q)})...")
+								Logger.error(f'{self.name}--Store failed, max retries exceeded, re_adding query to queue ({len(self.DBstore_Q)})...')
 								# delete the query from the queue and add it again at the top....
 								self.add_query(self.DBstore_Q.pop(0))
 								break
@@ -94,7 +97,7 @@ class DBstore_engine(object):
 					self.CONN.close()
 				while self.keeprunning:
 					time.sleep(1.0)
-					Logger.error('%s--restoring connection to %s...'  % (self.name, self.dbfile))
+					Logger.error(f'{self.name}--restoring connection to {self.dbfile}...')
 					if self.connect(): break
 				
 		self.stoppedrunning=True

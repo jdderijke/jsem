@@ -237,7 +237,6 @@ class Switch(gui.Widget):
 		self.add_child(str(id(self.slider)), self.slider)
 		self.onclick.connect(self.onswitched)
 		
-		# print(f'initial_state {initial_state}')
 		self.__set_switch(initial_state)
 		self.set_lock(initial_locked)
 
@@ -245,7 +244,6 @@ class Switch(gui.Widget):
 		return self.attributes['switch'] == 'on'
 
 	def set_value(self, nw_state:bool):
-		# print(f'set_value called')
 		if self.locked: return
 		if nw_state:
 			self.__set_switch(True)
@@ -260,7 +258,6 @@ class Switch(gui.Widget):
 	@decorate_set_on_listener("(self, emitter)")
 	@decorate_event
 	def onswitched(self, emitter):
-		# print(f'onswitched called')
 		if self._locked: return (self.get_value(),)
 		if self.get_value():
 			self.__set_switch(False)
@@ -271,7 +268,6 @@ class Switch(gui.Widget):
 
 	def __set_switch(self, state):
 		if self.locked: return
-		# print(f'state: {state}')
 		if state:
 			self.attributes['switch'] = 'on'
 			self.slider.style['transform'] = 'translateY(-99%)'

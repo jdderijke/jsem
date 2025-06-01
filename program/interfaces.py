@@ -5,7 +5,7 @@ from Common_Enums import *
 from enum import Enum
 
 # import socket
-from Emulators import Socket, Modbus
+from Emulators import Socket_Stub, Modbus_Stub, Serial_Stub, Shelly_Stub
 
 import threading
 import time
@@ -22,7 +22,6 @@ from bs4 import BeautifulSoup
 from Conversion_Routines import ByteArrayToHexString, From_ByteArray_converter, To_ByteArray_converter, \
 	HexStringToByteArray
 from DataPoint import Datapoint
-from Emulators import Serial_Emulator, Shelly_Emulator
 from LogRoutines import Logger
 from DB_Routines import populate_interface, get_pollmessages_from_database
 # import Conversion_Routines
@@ -320,7 +319,7 @@ class BaseInterface(object):
 			self.connstate = ConnState.Connecting
 			
 			if self.conn_type in ["EBUS-TCP", "MBUS-TCP", "RS485-TCP", "DEFAULT-TCP"]:
-				self.TCPclientSock = Socket(Socket.AF_INET, Socket.SOCK_STREAM, busfree_byte=self.bus_free, echo=True)
+				self.TCPclientSock = Socket_Stub(Socket_Stub.AF_INET, Socket_Stub.SOCK_STREAM, busfree_byte=self.bus_free, echo=True)
 				self.TCPclientSock.settimeout(self.timeout)
 				for tries in range(self.maxretries):
 					try:
@@ -331,7 +330,7 @@ class BaseInterface(object):
 						time.sleep(0.5)
 						
 			elif self.conn_type in ["EBUS-UDP", "MBUS-UDP"]:
-				self.UDPclientSock = Socket(Socket.AF_INET, Socket.SOCK_DGRAM, busfree_byte=self.bus_free, echo=True)
+				self.UDPclientSock = Socket_Stub(Socket_Stub.AF_INET, Socket_Stub.SOCK_DGRAM, busfree_byte=self.bus_free, echo=True)
 				self.UDPclientSock.settimeout(self.timeout)
 				for tries in range(self.maxretries):
 					try:
@@ -347,7 +346,7 @@ class BaseInterface(object):
 			elif self.conn_type == "MODBUS-TCP":
 				for tries in range(self.maxretries):
 					try:
-						self.Modbus_Conn = Modbus(device_type=self.device_type, host=self.address,port=self.port,timeout=self.timeout,framer=None,
+						self.Modbus_Conn = Modbus_Stub(device_type=self.device_type, host=self.address,port=self.port,timeout=self.timeout,framer=None,
 														   unit=self.device_sub_addr,udp=False, awake_registername=self.awake_registername)
 						self.connstate = ConnState.Connected
 						break
@@ -357,10 +356,7 @@ class BaseInterface(object):
 						
 			elif self.conn_type == "P1-SERIAL":
 				# Configure serial Com port
-				if ENVIRONMENT == Environment.Test_full:
-					self.Ser = Serial_Emulator()
-				else:
-					self.Ser = serial.Serial(baudrate=self.baudrate, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE)
+				self.Ser = Serial_Stub(baudrate=self.baudrate, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE)
 				self.Ser.baudrate = self.baudrate
 				self.Ser.bytesize=getattr(serial,self.bytesize)
 				self.Ser.parity=getattr(serial,self.parity)
@@ -382,10 +378,7 @@ class BaseInterface(object):
 			elif self.conn_type == "SHELLY-TCP":
 				# define a new Shelly interface
 				for tries in range(self.maxretries):
-					if ENVIRONMENT == Environment.Test_full:
-						self.Shelly = Shelly_Emulator()
-					else:
-						self.Shelly = pyShelly()
+					self.Shelly = Shelly_Stub()
 					try:
 						self.Shelly.start()
 						# self.shelly.discover()
@@ -484,7 +477,7 @@ class BaseInterface(object):
 			try:
 				if conn_type in ["EBUS-TCP", "MBUS-TCP", "RS485-TCP", "DEFAULT-TCP"]:
 					# shutdown forces all processes to disconnect from the socket and sends an EOF to the peer, but you still need to close the socket
-					self.TCPclientSock.shutdown(Socket.SHUT_RDWR)
+					self.TCPclientSock.shutdown(Socket_Stub.SHUT_RDWR)
 					self.TCPclientSock.close()
 					self.TCPclientSock=None
 				elif conn_type in ["EBUS-UDP"]:
@@ -937,7 +930,6 @@ class SdmModbusInterface(BaseInterface):
 
 
 
-from pyShelly import pyShelly
 	
 class ShellyRelayInterface(BaseInterface):
 	def __init__(self, *args, **kwargs):

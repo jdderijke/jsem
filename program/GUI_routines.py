@@ -482,6 +482,17 @@ def Instellingen(DataCont:Container, ChartCont:VBox, my_app):
 							  'justify-content:space-around; align-items:flex-start; background-color:transparent')
 		# set_css_defaults(IntfVbox, width="100%", height="45%")
 		
+		if Common_Data.DB_STORE is not None:
+			DB_Engine = Common_Data.DB_STORE
+			DBSubHbox = HBox(style='width:90%; height:8%; background-color:transparent')
+			btn_style = 'width:10%; height:100%'
+			lbl = Label(DB_Engine.name, style=btn_style)
+			DBSubHbox.append(lbl)
+			DB_load_widget = Progress(value=0, max=100, style='width:50%; height:100%')
+			Common_Data.DB_STORE.status_widget = DB_load_widget
+			DBSubHbox.append(DB_load_widget)
+			IntfVbox.append((DBSubHbox))
+		
 		for intfname in INTERFACE_NAME:
 			intf = INTERFACE_NAME[intfname]
 			IntfSubHbox = HBox(style='width:90%; height:8%; background-color:transparent')

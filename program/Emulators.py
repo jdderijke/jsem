@@ -1,12 +1,14 @@
 import datetime
 import time
-import sdm_modbus
-import socket as prod_socket
 
 from Config import ENVIRONMENT
 from Common_Enums import *
 
-class Socket(prod_socket.socket):
+import sdm_modbus
+import socket as prod_socket
+
+
+class Socket_Stub(prod_socket.socket):
 	"""
 	In normal operation (ENVIRONMENT=Productie) this socket is just a regular socket.socket instance
 	In full test operation (ENVIRONMENT=Test_full) this socket EMULATES a socket.socket instance
@@ -17,14 +19,15 @@ class Socket(prod_socket.socket):
 	SHUT_RDWR = prod_socket.SHUT_RDWR
 	
 	def __init__(self, *args, **kwargs):
+		self.busfree_byte = kwargs.pop('busfree_byte', bytearray([]))
+		self.baudrate = kwargs.pop('baudrate', 200)
+		self.echo = kwargs.pop('echo', False)
 		if ENVIRONMENT == Environment.Productie:
 			super().__init__(*args)
+			return
 		
 		self.blocking = True
-		self.busfree_byte = kwargs.get('busfree_byte', bytearray([]))
-		self.baudrate = kwargs.get('baudrate', 200)
 		self.byte_time = 1 / (self.baudrate/10)
-		self.echo = kwargs.get('echo', False)
 		self.echo_buffer = bytearray([])
 		pass
 	
@@ -88,7 +91,7 @@ class Socket(prod_socket.socket):
 	def sendto(self, sendbytes, *args, **kwargs):
 		self.send(sendbytes)
 
-class Modbus(object):
+class Modbus_Stub(object):
 	def __init__(self,	**kwargs):
 		self.awake_registername = kwargs.pop('awake_registername', None)
 		if ENVIRONMENT == Environment.Productie:
@@ -130,10 +133,9 @@ class Modbus(object):
 
 
 
-# import serial
+import serial
 # from datetime import datetime
-
-class Serial_Emulator(object):
+class Serial_Stub(serial.Serial):
 	dummy_sample = """This is sample transmission
 	Using the Serial Emulator
 	Emulating the esmr50 interface
@@ -183,8 +185,12 @@ class Serial_Emulator(object):
 	!
 	"""
 	
-	def __init__(self, for_real=False):
-		self.for_real = for_real
+	def __init__(self, *args, **kwargs):
+		self.for_real = kwargs.pop('for_real', False)
+		if ENVIRONMENT == Environment.Productie:
+			super().__init__(*args, **kwargs)
+			return
+		self.is_open = False
 		self.baudrate = 115200
 		self.bytesize = 8
 		self.parity = 'N'
@@ -194,7 +200,6 @@ class Serial_Emulator(object):
 		self.timeout = 20
 		# bit confusing but with port a serial COM port is expected, i.e. /dev/ttyUSB0...
 		self.port = '/dev/ttyUSB0'
-		self.is_open = False
 		self.gen = self.generator()
 		self.keep_generating = False
 		
@@ -223,13 +228,13 @@ class Serial_Emulator(object):
 		self.gen = self.generator()
 	
 	def generator(self):
-		sample = Serial_Emulator.esmr50_realdata_sample if self.for_real else Serial_Emulator.dummy_sample
+		sample = Serial_Stub.esmr50_realdata_sample if self.for_real else Serial_Stub.dummy_sample
 		for teller, line in enumerate(sample.splitlines()):
 			# Yield a bytes object
 			result =  bytes(line, 'utf-8')
 			yield result
 
-
+from pyShelly import pyShelly
 class device():
 	def __init__(self, device_type):
 		self.device_type = device_type
@@ -240,9 +245,11 @@ class device():
 	
 	def turn_off(self):
 		self.state = 0
-
-class Shelly_Emulator(object):
-	def __init__(self):
+class Shelly_Stub(pyShelly):
+	def __init__(self, *args, **kwargs):
+		if ENVIRONMENT == Environment.Productie:
+			super().__init__(*args, **kwargs)
+			return
 		self.devices = []
 	
 	def start(self):
@@ -268,7 +275,7 @@ if __name__ == '__main__':
 	# Test Serial_Emulator
 	print ('Cntrl-C to flush inputbuffer (reset), cntrl-C twice to exit...')
 	print ()
-	test = Serial_Emulator()
+	test = Serial_Stub()
 	test.open()
 	while True:
 		try:
