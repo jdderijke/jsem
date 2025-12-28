@@ -1,4 +1,5 @@
 import datetime
+import random
 import time
 
 from Config import ENVIRONMENT
@@ -94,11 +95,6 @@ class Socket_Stub(prod_socket.socket):
 class Modbus_Stub(object):
 	def __init__(self,	**kwargs):
 		self.awake_registername = kwargs.pop('awake_registername', None)
-		if ENVIRONMENT == Environment.Productie:
-			initializer = getattr(sdm_modbus, kwargs.pop('device_type'))
-			initializer(**kwargs)
-			return
-		
 		self.is_connected = True
 		self.input_registers = {'inp_1':1, 'inp_2':2}
 		self.holding_registers = {'hol_1':11, 'hol_2':12}
@@ -110,14 +106,14 @@ class Modbus_Stub(object):
 		return self.is_connected
 	
 	
-	def read(self, registername):
+	def read(self, registername, scaling=False):
 		if registername == self.awake_registername: return 999999
 		
 		result = id(registername)
 		print(f'Read {registername}, returns {result}')
 		return result
 	
-	def read_all(self, register_type:sdm_modbus.registerType):
+	def read_all(self, register_type:sdm_modbus.registerType, scaling=False):
 		if register_type == sdm_modbus.registerType.INPUT:
 			return self.input_registers
 		elif register_type == sdm_modbus.registerType.HOLDING:
@@ -173,11 +169,11 @@ class Serial_Stub(serial.Serial):
 	1-0:31.7.0(000*A)
 	1-0:51.7.0(006*A)
 	1-0:71.7.0(003*A)
-	1-0:21.7.0(00.013*kW)
-	1-0:41.7.0(00.000*kW)
-	1-0:61.7.0(00.708*kW)
+	1-0:21.7.0(00.113*kW)
+	1-0:41.7.0(03.400*kW)
+	1-0:61.7.0(02.708*kW)
 	1-0:22.7.0(00.000*kW)
-	1-0:42.7.0(01.519*kW)
+	1-0:42.7.0(00.000*kW)
 	1-0:62.7.0(00.000*kW)
 	0-1:24.1.0(003)
 	0-1:96.1.0(4730303538353330303432353538383230)
@@ -215,7 +211,7 @@ class Serial_Stub(serial.Serial):
 	def readline(self):
 		if self.is_open:
 			try:
-				time.sleep(0.1)
+				# time.sleep(0.01)
 				result = next(self.gen)
 				return result
 			except StopIteration:
@@ -230,6 +226,12 @@ class Serial_Stub(serial.Serial):
 	def generator(self):
 		sample = Serial_Stub.esmr50_realdata_sample if self.for_real else Serial_Stub.dummy_sample
 		for teller, line in enumerate(sample.splitlines()):
+			line = line.strip()
+			# spice up the emulator by generating some bogus data
+			if line[:10] in ['1-0:32.7.0', '1-0:52.7.0', '1-0:72.7.0']:
+				line = line[:10] + f'({random.randint(220, 248):.1f}*V)'
+			elif line[:10] in ['1-0:31.7.0', '1-0:51.7.0', '1-0:71.7.0']:
+				line = line[:10] + f'({random.randint(10, 24)}*A)'
 			# Yield a bytes object
 			result =  bytes(line, 'utf-8')
 			yield result

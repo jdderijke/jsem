@@ -38,7 +38,7 @@ from Config import LOOK_BACK_DAYS, CONFIDENCE_LEVEL, MINIMUM_VALID_SAMPLES, HEAT
 from Config import METEOSERVER_FORECASTS, METEOSERVER_KEY, METEOSERVER_URL, METEOSERVER_DEFAULT_LOCATION
 from Config import DBFILE
 from Common_Data import CWD
-from Common_Routines import cursor_to_dict, get_input, get_newest_file
+from JSEM_Commons import cursor_to_dict, get_input, get_newest_file
 from Common_Data import DATAPOINTS_NAME, DATAPOINTS_ID
 from Datapoint_IDs import *
 

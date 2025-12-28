@@ -26,15 +26,15 @@ try:
 	Logger.setLevel(Loglevel)
 	# Standaard worden log messages doorgegeven aan de root Logger, om dit te voorkomen (en dus te voorkomen dat er toch nog messages komen
 	# op de stdOUT dient propagate op False te worden gezet!!
-	if ENVIRONMENT == Environment.Productie:
-		Logger.propagate = False
-	else:
-		Logger.propagate = False
-		handler2 = logging.StreamHandler(sys.stdout)
-		# handler2.setLevel(Loglevel)
-		formatter2 = logging.Formatter('%(asctime)s - %(levelname)s - %(module)s:%(funcName)s - %(message)s')
-		handler2.setFormatter(formatter2)
-		Logger.addHandler(handler2)
+	# if ENVIRONMENT == Environment.Productie:
+	# 	Logger.propagate = False
+	# else:
+	Logger.propagate = False
+	handler2 = logging.StreamHandler(sys.stdout)
+	# handler2.setLevel(Loglevel)
+	formatter2 = logging.Formatter('%(asctime)s - %(levelname)s - %(module)s:%(funcName)s - %(message)s')
+	handler2.setFormatter(formatter2)
+	Logger.addHandler(handler2)
 			
 	Logger.info("Logfile created....")
 	# print ("LogRoutines ran")

@@ -1,26 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-#  JSEM_Rules.py
-#  
-#  Copyright 2022  <pi@raspberrypi>
-#  
-#  This program is free software; you can redistribute it and/or modify
-#  it under the terms of the GNU General Public License as published by
-#  the Free Software Foundation; either version 2 of the License, or
-#  (at your option) any later version.
-#  
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#  
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software
-#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-#  MA 02110-1301, USA.
-#  
-#  
+
 import threading
 import time
 from Datapoint_IDs import *
@@ -29,6 +7,12 @@ import Common_Data
 from LogRoutines import Logger
 from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME
 from datetime import datetime
+
+from program.Epex_Leba_data_download import get_epex_leba_data, HEADERS, PROVIDERS
+from program.HP_Optimizer import make_hp_plan, predict_heatingpower
+from program.MeteoServer_Forecast import get_meteoserver_forecast
+
+
 # from dateutil.relativedelta import relativedelta
 
 class JSEM_Rule(object):
@@ -75,7 +59,44 @@ class JSEM_Rule(object):
 			self.rule_timer = None
 		Logger.info ("%s-- Strategy stopped." % self.name)
 
-		
+
+def get_weather_frcst(*args, **kwargs):
+	Logger.info("Running get_meteoserver_forecast....")
+	result = get_meteoserver_forecast(running_standalone=False,
+									  location='8141PR',
+									  make_csv=True,
+									  store_in_db=True)
+
+
+def get_epex_data(*args, **kwargs):
+	Logger.info("Running get_epex_leba_data.... for electricity")
+	for provider in PROVIDERS:
+		header = HEADERS['electricity']
+		if get_epex_leba_data(header=header, provider=provider, start_date=datetime.now(),
+							  end_date=datetime(2099,12,31,0,0,0),
+							  make_csv=True, store_in_db=True, incl_vat=False):
+			break
+
+def get_leba_data(*args, **kwargs):
+	Logger.info("Running get_epex_leba_data.... for gas")
+	for provider in PROVIDERS:
+		header = HEADERS['gas']
+		if get_epex_leba_data(header=header, provider=provider, start_date=datetime.now(),
+							  end_date=datetime(2099,12,31,0,0,0),
+							  make_csv=True, store_in_db=True, incl_vat=False):
+			break
+
+
+def optimizer(*args, **kwargs):
+	"""
+	Runs a predictor on the heating power needed based on the model and weather forecast
+	Then runs an algorithm to find the best way to provide in this power based on EPEX prices and costs
+	"""
+	Logger.info("Running HP optimization algorithms....")
+	predict_heatingpower(msg='Ran as preparation for HP_Optimizer...')
+	make_hp_plan(store_plan=True)
+
+
 
 
 def warmtepomp_strat_1(*args, **kwargs):
@@ -85,21 +106,18 @@ def warmtepomp_strat_1(*args, **kwargs):
 	moet stoppen
 	'''
 	from DB_Routines import get_value_from_database
-	hp_plan = 282
-
 	Logger.debug("Running warmtepomp_strat_1....")
 	
 	use_strategy = DATAPOINTS_ID[use_hp_strategy].value
-
-	buffer_isboosting = DATAPOINTS_ID[buffervat_boost]
-	vloer_isboosting = DATAPOINTS_ID[vloer_boost]
-	hc_50 = DATAPOINTS_ID[HeatCurve_50]
-	hc_52 = DATAPOINTS_ID[HeatCurve_52]
 	
-	default_hc_50 = DATAPOINTS_ID[hc50_default_hc].value
-	default_hc_52 = DATAPOINTS_ID[hc52_default_hc].value
-	boost_hc_50 = DATAPOINTS_ID[hc50_boost_hc].value
-	boost_hc_52 = DATAPOINTS_ID[hc52_boost_hc].value
+	buftemp_setp = DATAPOINTS_ID[buf_temp_setp].value
+	hpboost_setp = DATAPOINTS_ID[hp_boost_setp].value
+	hpnorm_setp = DATAPOINTS_ID[hp_normal_setp].value
+	
+	vloerflowtemp_setp = DATAPOINTS_ID[vloer_flow_temp_setp].value
+	vloerboost_incr = DATAPOINTS_ID[vloer_boost_incr].value
+	
+	# Logger.info(f'buf_temp_setp:{buftemp_setp}, hp_boost_setp:{hpboost_setp}, hp_normal_setp:{hpnorm_setp}')
 
 	overrule_hp = DATAPOINTS_ID[use_hp_overrule].value
 	
@@ -122,20 +140,22 @@ def warmtepomp_strat_1(*args, **kwargs):
 		overrule_hp = False
 
 	if (use_strategy and run_hp) or overrule_hp:
-		if not buffer_isboosting.value: buffer_isboosting.value = 1
-		if hc_50.value != boost_hc_50:
-			Logger.info ("Warmtepomp-buffervat boost--Hc_50 aangepast van %s naar %s" % (hc_50.value, boost_hc_50))
-			# write nieuwe stooklijn naar systeem
-			hc_50.write_value(nwvalue=boost_hc_50)
+		if buftemp_setp != hpboost_setp:
+			Logger.info (f"BOOST ON--buf_temp_setp naar {hpboost_setp}, vloer_flow_temp_setp naar {vloerflowtemp_setp+vloerboost_incr}")
+			# write new boost setpoints to system
+			DATAPOINTS_ID[buf_temp_setp].write_value(nwvalue=hpboost_setp)
+			DATAPOINTS_ID[sl_temp_corr].write_value(nwvalue=vloerboost_incr)
+			# During loading keep the circulationpump running to achieve maximal mixing in the buffer
+			DATAPOINTS_ID[circ_pomp_hp_buf].write_value(nwvalue=True)
 	else:
-		buffer_isboosting.value = 0
-		if hc_50.value != default_hc_50:
-			hc_50.write_value(nwvalue=default_hc_50)
-			Logger.info ("Warmtepomp-buffervat boost OFF--Hc_50 aangepast van %s naar %s" % (hc_50.value, default_hc_50))
-		# if hc_52.value != default_hc_52:
-			# hc_52.write_value(nwvalue=default_hc_52)
-			# Logger.info ("Warmtepomp-vloer boost OFF--Hc_52 aangepast van %s naar %s" % (hc_52.value, default_hc_52))
-	
+		if buftemp_setp != hpnorm_setp:
+			Logger.info (f"BOOST OFF--buf_temp_setp aangepast naar {hpnorm_setp}, vloer_sl_temp_corr reset to 0.0")
+			DATAPOINTS_ID[sl_temp_corr].write_value(nwvalue=0.0)
+			DATAPOINTS_ID[buf_temp_setp].write_value(nwvalue=hpnorm_setp)
+			# Normally we don't want mixing in the buffer when it unloads
+			DATAPOINTS_ID[circ_pomp_hp_buf].write_value(nwvalue=False)
+
+
 	
 	
 
@@ -197,7 +217,7 @@ def zwembad_rule_1(*args, **kwargs):
 	Wanneer de actuele prijs boven de grenswaarde komt, wordt de pomp UITgeschakeld
 	'''
 	from DB_Routines import get_value_from_database
-	from Common_Routines import this10min_timestamp
+	from JSEM_Commons import this10min_timestamp
 	
 	Logger.debug("Running zwembad_rule_1....")
 	use_strategy = bool(DATAPOINTS_ID[pool_use_strategy].value)

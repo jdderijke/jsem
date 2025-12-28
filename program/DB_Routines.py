@@ -1,3 +1,5 @@
+import numpy
+
 from LogRoutines import Logger
 import time
 from datetime import datetime
@@ -14,8 +16,8 @@ from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, CATEGORY_ID, CATEGORY_NA
 from Common_Enums import *
 from DataPoint import Datapoint, Category, Pollmessage, Protocol
 # from interfaces import BaseInterface
-from Common_Routines import get_type, dump, IsNot_NOE, Is_NOE, Waitkey, Calculate_Timerset, Calculate_Period
-from Common_Routines import cursor_to_dict, update_progressbar, get_begin_of_week
+from JSEM_Commons import get_type, dump, IsNot_NOE, Is_NOE, Waitkey, Calculate_Timerset, Calculate_Period
+from JSEM_Commons import cursor_to_dict, update_progressbar, get_begin_of_week
 
 from Config import TCPPORT, DBFILE, DB_RETRIES, DB_WAITBETWEENRETRIES, Max_Chart_Points, DB_alivetime, DB_looptime
 # from TCP_Routines import tcp_sql_query
@@ -104,6 +106,10 @@ class DBstore_engine(object):
 		self.keeprunning=False
 		
 	def stop(self):
+		while len(self.DBstore_Q) != 0:
+			Logger.info(f'{self.name}--Stop requested but still {len(self.DBstore_Q)} SQL requests in queue ')
+			time.sleep(1.0)
+			
 		self.keeprunning=False
 		self.thrd.join()
 		Logger.info (f"{self.name}--DBstore_engine stopped.")
@@ -478,42 +484,38 @@ def create_leading_timestamps(startdate, enddate, datagrouping):
 	
 	
 def get_df_from_database(	dpIDs=[], dataselection=DataSelection.Day, datagrouping=DatabaseGrouping.All, aggregation=Aggregation.Not,
-							selected_startdate=None, selected_enddate=None, dataselection_date=None, maxrows=None,
+							selected_startdate:datetime=None, selected_enddate:datetime=None, dataselection_date=None, maxrows=None,
 							IDs_as_columnheaders=False, add_datetime_column=False, merge_tolerance=3600-10, 
 							use_remote_JSEM_DB = False, host=None, port=None):
-	'''
+	"""
 	This routine returns a Pandas dataframe with the values of the datapoints in columns with the datapoints name or ID as columnname.
 	After the first datapoint..extra datapoints will be added to this dataframe based on their timestamps whereby 
 	the CLOSEST LAST (backwards) timestamp will be fitted
-	dpIDs:
-		Datapoints can be passed through the dpIDs argument with their ID's 
-	dataselection (only valid together with a dataselection_date and a selected_startdate and selected_enddate of None (missing)
-		Determines the start and enddate automatically based on a display dataselection criterium
-	datagrouping:
-		A valid datagrouping can be passed to group the result on certain timeintervals (hour, day, week, month etc.), default ALL=no grouping
-	aggregation:
-		So data is grouped according to the datagrouping setting, now what to do in terms of aggregation (sum, min, max , mean etc. etc)
-		If no aggregation is done, the first row in every group will be returned (same as First) Last is also an option...
-	selected_startdate:
-		The startdate filter on the datapoint values. Default is earliest startdate of all values of the passed dpIDs
-	selected_enddate:
-		The enddate filter on de datapoint values. Default is the latest enddate of all values of the passed dpIDs
-	maxrows (only in combination with datagrouping.All):
-		The maximum number of datarows to be returned.. evenly spread between the start and enddate
-	IDs_as_columnheaders:
-		Normally the columnheaders will be the datapoint names, if IDs_as_columnheaders is set to True headers will be datapoint ID's
-	add_datetime_column:
-		Optionally add an extra datetime column so that you can read the timestamp info in a friendly way, default False
-	merge_tolerance:
-		Upon merging 2 datapoints or fitting a datapoint into a fixed time distribution merging happens backwards. merge_tolerance specifies
-		how far backwards a value should be taken into the merged results. Default 1 hour minus 10 seconds.
-	use_remote_JSEM_DB:
-		Connect to a remote DB (the JSEM DB) via tcp_sql module, default False
-	**kwargs:
-		Extra arguments..
-		host: IP address of remote host
-		port: Port on remote host
-	'''
+	:param dpIDs:			Datapoints can be passed through the dpIDs argument with their ID's
+	:param dataselection: 	(only valid together with a dataselection_date and a selected_startdate and selected_enddate of None (missing)
+							Determines the start and enddate automatically based on a display dataselection criterium
+	:param datagrouping:	A valid datagrouping can be passed to group the result on certain timeintervals (hour, day, week, month etc.),
+							default ALL=no grouping
+	:param aggregation:		So data is grouped according to the datagrouping setting, now what to do in terms of aggregation (sum, min, max , mean etc. etc)
+							If no aggregation is done, the first row in every group will be returned (same as First) Last is also an option...
+	:param selected_startdate:
+							The startdate filter on the datapoint values. Default is earliest startdate of all values of the passed dpIDs
+	:param selected_enddate:
+							The enddate filter on de datapoint values. Default is the latest enddate of all values of the passed dpIDs
+	:param maxrows:			(only in combination with datagrouping.All):
+							The maximum number of datarows to be returned.. evenly spread between the start and enddate
+	:param IDs_as_columnheaders:
+							Normally the columnheaders will be the datapoint names, if IDs_as_columnheaders is set to True headers will be datapoint ID's
+	:param add_datetime_column:
+							Optionally add an extra datetime column so that you can read the timestamp info in a friendly way, default False
+	:param merge_tolerance:
+							Upon merging 2 datapoints or fitting a datapoint into a fixed time distribution merging happens backwards.
+							merge_tolerance specifies how far backwards a value should be taken into the merged results. Default 1 hour minus 10 seconds.
+	:param use_remote_JSEM_DB:
+							Connect to a remote DB (the JSEM DB) via tcp_sql module, default False
+	:param host:			IP address of remote host
+	:param port:			Port on remote host
+	"""
 	datapoints = []
 	merge_df = None
 	CONN = None
@@ -792,6 +794,8 @@ def populate_interface(interf=None, name='', ID=None, **kwargs):
 		
 		result_df = pd.read_sql_query(query, CONN)
 		for attribute in result_df:
+			if result_df[attribute].dtypes == numpy.int64:
+				result_df[attribute] = result_df[attribute].astype(numpy.int32)
 			value = result_df.loc[0][attribute]
 			setattr(interf, attribute, value)
 		

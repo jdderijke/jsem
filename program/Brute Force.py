@@ -34,10 +34,10 @@ import time
 # buf_init = 5.0		# Kwh
 
 # Johan test set...
-hp_power = 14.5		# Kw
+hp_power = 16		# Kw
 hp_usage = 3.5		# Kw
 buf_min = 3.0		# Kwh
-buf_max = 40.0		# Kwh
+buf_max = 38.0		# Kwh
 buf_init = 5.1		# Kwh
 # uur          0      1     2     3     4     5     6     7     8     9    10    11     12     13    14    15    16    17     18     19    20    21    22    23
 epex_prijs = [5.50, 4.38, 4.07, 3.99, 3.51, 4.02, 6.24, 8.12, 8.12, 6.24, 2.13, 0.00, -1.00, -1.14, 6.21, 8.21, 2.93, 7.94, 10.08, 11.62, 9.67, 8.25, 7.62, 6.49]
@@ -158,15 +158,15 @@ def brute_force():
 	
 
 def main(args):
-	start=time.time()
-	clever_result = clever_force()
-	print("clever_force() took %s s" % (time.time() - start))
-	for cur_hour in range(len(epex_prijs)):
-		print ("Clever___uur %s, gaat HP %s, buf_init = %s, cost = %s, cum_cost = %s" % 
-			(cur_hour, 'AAN' if clever_result["draaien"][cur_hour] else 'UIT', round(clever_result["buf_cap"][cur_hour],2), 
-			 round(clever_result["cost"][cur_hour],2), round(sum(clever_result["cost"][0:cur_hour+1]), 2)))
-	
-	input("Any key to continue...")
+	# start=time.time()
+	# clever_result = clever_force()
+	# print("clever_force() took %s s" % (time.time() - start))
+	# for cur_hour in range(len(epex_prijs)):
+	# 	print ("Clever___uur %s, gaat HP %s, buf_init = %s, cost = %s, cum_cost = %s" %
+	# 		(cur_hour, 'AAN' if clever_result["draaien"][cur_hour] else 'UIT', round(clever_result["buf_cap"][cur_hour],2),
+	# 		 round(clever_result["cost"][cur_hour],2), round(sum(clever_result["cost"][0:cur_hour+1]), 2)))
+	#
+	# input("Any key to continue...")
 	
 	start=time.time()
 	brute_result = brute_force()

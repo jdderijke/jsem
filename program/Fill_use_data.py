@@ -33,7 +33,7 @@ if __name__ == "__main__":
 import os
 from LogRoutines import Logger
 from Config import DAYAHEAD_PRICES, CHROMEDRIVER_LOCATION, ENVIRONMENT, LOGFILELOCATION, Loglevel
-from Common_Routines import cursor_to_dict
+from JSEM_Commons import cursor_to_dict
 # from Common_Enums import *
 import sqlite3
 

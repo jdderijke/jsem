@@ -1,4 +1,4 @@
-from sdm_modbus import meter
+from program.sdm_modbus import meter
 
 
 class SDM(meter.Meter):
@@ -111,7 +111,7 @@ class SDM72(SDM):
 			"voltage_ln": (0x002a, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "L-N Voltage", "V", 1, 1),
 			"current_ln": (0x002e, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "L-N Current", "A", 1, 1),
 			"total_line_current": (0x0030, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "Total Line Current", "A", 1, 1),
-			"total_power": (0x0034, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "Total Power", "W", 1, 1),
+			"total_power": (0x0034, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "Total Power", "kW", 1, 0.001),
 			"total_power_apparent": (0x0038, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "Total Power (Apparent)", "VA", 1, 1),
 			"total_power_reactive": (0x003C, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "Total Power (Reactive)", "VAr", 1, 1),
 			"total_pf": (0x003E, 2, meter.registerType.INPUT, meter.registerDataType.FLOAT32, float, "Total Power Factor", "", 1, 1),

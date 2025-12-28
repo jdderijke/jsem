@@ -20,7 +20,9 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 #  
-#  
+#
+from typing import Union
+
 from LogRoutines import Logger
 import remi.gui as gui
 from remi.gui import *
@@ -33,6 +35,8 @@ from Datapoint_IDs import *
 from JSEM_GUI_classes import JSEM_Label, JSEM_Stacked_Bar, JSEM_BalancedGauge, JSEM_Map_Chart, JSEM_ChartCont
 from JSEM_GUI_classes import JSEM_Bar_Chart, JSEM_Line_Chart, JSEM_Rect, JSEM_Arrow, JSEM_Buffer, JSEM_MultiArrow, JSEM_WeatherIcon
 from remi_addons import Switch, PushBtn
+
+from program.DataPoint import Datapoint
 
 DataCont = Common_Data.DATA_PARENT_CONTAINER
 
@@ -105,17 +109,17 @@ class Heat_widget(Container):
 			vloerin = JSEM_Arrow(self, dp[Act_Power_01], top='32%', left='45%', width='10%', height='17%', orientation='vertical', arrow='begin', style=arrow_style, line_stroke='red',
 								cond_format = dict(cond=">", check_value=0.0, prop='line-stroke', true="red", false="grey"))
 			JSEM_Label(self, dp[Act_Power_01], top='40%', left='56%', config=lbl_config, style=lbl_style, value_color='black', 
-								cond_format = dict(cond=">", check_value=0.0, prop='visibility', true="visible", false="hidden"))
+								cond_format = dict(cond=">", check_value=0.0, prop='value-color', true="black", false="grey"))
 
 
 	
 	
 			# Heatpump als verwarmer of als cooling
-			wpheatln = JSEM_Arrow(self, dp[Act_Power_HP], top='72%', left='62%', width='12%', height='10%', arrow='begin', style=arrow_style, line_stroke='red', 
+			wpheatln = JSEM_Arrow(self, dp[hp_power], top='72%', left='62%', width='12%', height='10%', arrow='begin', style=arrow_style, line_stroke='red',
 								cond_format = dict(cond=">", check_value=0.0, prop='line-stroke', true="red", false="grey"))
 								# cond_format = dict(cond=">", check_value=0.0, prop='visibility', true="visible", false="visible"))
 								
-			JSEM_Label(self,dp[Act_Power_HP], top='81%', left='67%', config=lbl_config, style=lbl_style, value_color='black',
+			JSEM_Label(self,dp[hp_power], top='81%', left='67%', config=lbl_config, style=lbl_style, value_color='black',
 								cond_format = dict(cond=">", check_value=0.0, prop='visibility', true="visible", false="hidden"))
 			
 			
@@ -125,7 +129,7 @@ class Heat_widget(Container):
 								
 			JSEM_Label(self,dp[Act_Power_01], top='40%', left='93%', config=lbl_config, style=lbl_style, value_color='blue',
 								cond_format = dict(cond="<", check_value=0.0, prop='visibility', true="visible", false="hidden"))
-			wpomp = JSEM_Rect(self, dp[Act_Power_HP], top='70%', left='75%', width='25%', height='15%', text="Warmtepomp",  style=rect_style,
+			wpomp = JSEM_Rect(self, dp[hp_power], top='70%', left='75%', width='25%', height='15%', text="Warmtepomp",  style=rect_style,
 								cond_format = 	[
 												dict(cond=">", check_value=0.0, true="red", false="grey", qit=True),
 												dict(cond="<", check_value=0.0, true="blue", false="grey")
@@ -356,42 +360,24 @@ class Hp_widget(Container):
 		return
 	
 	def build(self, **kwargs):
-		from Common_Routines import Load_Images
+		from JSEM_Commons import Load_Images
 		from Config import IMAGES_LOCATION
 		dps = DATAPOINTS_ID
 		
-		def on_btn_switched(switch, state, **kwargs):
-			mc_52 = dps[Mc_Mode_52]
-			mc_50 = dps[Mc_Mode_50]
-			nwvalue = 2 if not state else 1
-			# by updating the datapoint value also (rather than have the interface do that for us), all widgets will be updated immediately
-			# with the new value. This new value will be overwritten once the interface receives the confirmed new value from the device...
-			mc_52.value = nwvalue
-			mc_50.value = nwvalue
+		def on_btn_switched(switch, state, dp_id, if_true, if_false, **kwargs):
 			# now send the new value to the interface
-			mc_52.write_value(nwvalue=nwvalue)
-			mc_50.write_value(nwvalue=nwvalue)
-		
-		def btn_clicked(*args, **kwargs):
-			if not 'incr' in kwargs: return
-			incr = kwargs['incr']
-			if incr == None:
-				mc_52 = dps[Mc_Mode_52]
-				mc_50 = dps[Mc_Mode_50]
-				nwvalue=2 if mc_52.value == 1 else 1
-				# by updating the datapoint value also (rather than have the interface do that for us), all widgets will be updated immediatly
-				# with the new value. This new value will be overwritten once the interface receives the confirmed new value from the device...
-				mc_52.value = nwvalue
-				mc_50.value = nwvalue
-				# now send the new value to the interface
-				mc_52.write_value(nwvalue=nwvalue)
-				mc_50.write_value(nwvalue=nwvalue)
-			else:
-				sp_52 = dps[DayTempSetpoint_52]
-				nwvalue=sp_52.value + incr
-				if kwargs.get('immediate_update', None): kwargs['immediate_update'].set_text('...')
-				sp_52.write_value(nwvalue=nwvalue)
-		
+			DATAPOINTS_ID[dp_id].write_value('0' if state else '4')
+			
+		def on_btn_update(btn_widg:Union[Switch, PushBtn], dp:Datapoint):
+			nw_state = (dp.value[0]=='0')
+			if btn_widg.get_value() != nw_state:
+				btn_widg.set_value(nw_state)
+
+		def up_dwn_btn_clicked(*args, **kwargs):
+			incr = kwargs.get('incr', 0.0)
+			nw_value = dps[sl_temp_corr].value + incr
+			dps[sl_temp_corr].write_value(nw_value)
+
 		
 		ind_config = {}
 		ind_style = {} 
@@ -415,7 +401,7 @@ class Hp_widget(Container):
 		
 		lbl_config = dict(show_name=False, show_subcat=False, show_value=True, show_unit=True, enable_RW=False)
 		lbl_style = {	
-						'value-color':'white', 'value-width':'70%', 'value-text-align':"left",
+						'value-color':'white', 'value-width':'70%', 'value-text-align':"left", 'value-background':'transparent',
 						'unit-color':'white', 'unit-font-size':'0.8em', 'unit-width':'30%', 
 						'width':'15px', 'height':'8px', 'font-size':'100%'
 					}
@@ -436,70 +422,53 @@ class Hp_widget(Container):
 			cool_ind.type='img'
 			cool_ind.attributes['src']=Load_Images('cooling')
 			
-			thrm_ind = JSEM_Label(status, dps[DayTempSetpoint_52], config=lbl_config, style=lbl_style, top='10%', left='25%', width='35%', height='80%',
+			thrm_ind = JSEM_Label(status, dps[sl_temp_corr], config=lbl_config, style=lbl_style, top='10%', left='25%', width='35%', height='80%',
 									value_font_weight='bold', value_font_size='1.5em')
+						
+			hp_ind = gui.Label(text='hp', style=f'position:absolute;top:25%;left:65%;width:10%;height:25%;font-size:0.7em;background:green;'
+									 f'visibility:{"hidden" if (dps[mode_verwarmen].value=="4: uit") else "visible"}')
+			hp_ind.refresh = lambda dp:hp_ind.set_style(f'visibility:{"hidden" if (dp.value=="4: uit") else "visible"}')
+			dps[mode_verwarmen].subscribed_widgets.append(hp_ind)
 			
-			# print(thrm_ind.value_lbl.style)
-									
-			mode50_ind = JSEM_Rect(status, dps[Mc_Mode_50], top='25%', left='65%', width='10%', height='50%', text='wp', text_font_size='0.7em',
-										background_color='green', style=rect_style, config=rect_config,
-										cond_format = [	dict(cond="eq", check_value=0, prop='visibility', true="hidden"),
-														dict(cond="eq", check_value=2, prop='visibility', true="hidden", false="visible"),
-														])
-			mode50_bst = JSEM_Rect(mode50_ind, dps[HeatCurve_50], top='0%', left='0%', width='100%', height='20%',
-										background_color='red', style=rect_style, config=rect_config,
-										cond_format = [	dict(cond="gt", check_value=1.0, prop='visibility', true="inherit", false="hidden")])
-													
-													
+			hpbst_ind = gui.Label(text='bst', style=f'position:absolute;top:50%;left:65%;width:10%;height:25%;font-size:0.7em;background:red;'
+										f'visibility:{"visible" if (dps[use_hp_strategy].value and dps[hp_plan].value) else "hidden"}')
+			hpbst_ind.refresh = lambda dp:hpbst_ind.set_style(f'visibility:{"visible" if (dps[use_hp_strategy].value and dps[hp_plan].value) else "hidden"}')
+			dps[use_hp_strategy].subscribed_widgets.append(hpbst_ind)
+			dps[hp_plan].subscribed_widgets.append(hpbst_ind)
+			
+			status.append([hp_ind, hpbst_ind])
 
-			mode52_ind = JSEM_Rect(status, dps[Mc_Mode_52], top='25%', left='80%', width='10%', height='50%', text='vl', text_font_size='0.7em',
-										background_color='green', style=rect_style, config=rect_config,
-										cond_format = [	dict(cond="eq", check_value=0, prop='visibility', true="hidden"),
-														dict(cond="eq", check_value=2, prop='visibility', true="hidden", false="visible"),
-														])
-			mode52_bst = JSEM_Rect(mode52_ind, dps[HeatCurve_52], top='0%', left='0%', width='100%', height='20%',
-										background_color='red', style=rect_style, config=rect_config,
-										cond_format = [	dict(cond="gt", check_value=1.0, prop='visibility', true="inherit", false="hidden")])
-			
+
 			# Bediening/ Controls
 			up_btn = Button()
 			up_btn.style.update({	'position':'absolute', 'top':'44%', 'left':'0%', 'width':'22%', 'height':'24%', 'background-color':'black',
 									'background-image': f"url({Load_Images('up')})", 'background-position': '50% 50%', 
 									'background-repeat':'no-repeat', 'background-size':'100% 80%'})
-			up_btn.onclick.connect(btn_clicked, incr=1, immediate_update=thrm_ind.value_lbl)
+			# up_btn.onclick.connect(lambda *args: dps[sl_temp_corr].write_value(dps[sl_temp_corr].value + 0.5))
+			up_btn.onclick.connect(up_dwn_btn_clicked, incr=1.0)
 
 			dwn_btn = Button()
 			dwn_btn.style.update({	'position':'absolute', 'top':'68%', 'left':'0%', 'width':'22%', 'height':'24%', 'background-color':'black',
 									'background-image': f"url({Load_Images('down')})", 'background-position': '50% 50%', 
 									'background-repeat':'no-repeat', 'background-size':'100% 80%'})
-			dwn_btn.onclick.connect(btn_clicked, incr=-1, immediate_update=thrm_ind.value_lbl)
+			dwn_btn.onclick.connect(up_dwn_btn_clicked, incr=-1.0)
 
-			# Old on off
-			# on_btn = Button()
-			# on_btn.style.update({	'position':'absolute', 'top':'44%', 'left':'48%', 'width':'22%', 'height':'48%', 'background-color':'black',
-			# 						'background-image': f"url({Load_Images('onoff3')})", 'background-position': '50% 50%',
-			# 						'background-repeat':'no-repeat', 'background-size':'70% 40%'})
-			# on_btn.onclick.connect(btn_clicked, incr=None)
-			# End old on off
 			
-			# print(f'dp[Mc_Mode_52].value=={dp[Mc_Mode_52].value}')
-			# print(f'dp[Mc_Mode_50].value=={dp[Mc_Mode_50].value}')
-			# print(bool(dp[Mc_Mode_52].value==1 and dp[Mc_Mode_50].value==1))
-			
-			on_btn = Switch(on_text='AAN', off_text='UIT',initial_state=(dps[Mc_Mode_52].value==1 and dps[Mc_Mode_50].value==1),
+			on_btn = Switch(on_text='AUT', off_text='UIT',initial_state=(dps[mode_verwarmen].value.strip()[0]=='0'),
 							style="position:absolute; top:44%; left:24%; width:20%; height:47%")
-			on_btn.onswitched.connect(on_btn_switched)
-			# on_btn.refresh = lambda dp: on_btn_switched(on_btn, (dps[Mc_Mode_52].value==1 and dps[Mc_Mode_50].value==1))
-			# dps[Mc_Mode_52].subscribed_widgets.append(on_btn)
-			# dps[Mc_Mode_50].subscribed_widgets.append(on_btn)
+			# on_btn.onswitched.connect(on_btn_switched)
+			on_btn.onswitched.connect(lambda widg, state:dps[mode_verwarmen].write_value('0' if state else '4'))
+			on_btn.refresh = lambda dp: on_btn.set_value(dp.value[0]!='4')
+			dps[mode_verwarmen].subscribed_widgets.append(on_btn)
 			
-			bst_50_btn = PushBtn(text='bst_50', style='position:absolute; top:44%; left:48%; width:20%; height:15%')
-			# bst_50_btn.lines.css_visibility='hidden'
-			bst_52_btn = PushBtn(text='bst_52', style='position:absolute; top:61%; left:48%; width:20%; height:15%')
-			# bst_52_btn.lines.css_visibility='hidden'
+			smart_btn = PushBtn(text='SMART', initial_state=dps[use_hp_strategy].value,
+								style = 'position:absolute; top:44%; left:48%; width:20%; height:15%')
+			smart_btn.onpushed.connect(lambda widg, state:dps[use_hp_strategy].write_value(state))
+			smart_btn.refresh = lambda dp:smart_btn.set_value(dp.value)
+			dps[use_hp_strategy].subscribed_widgets.append(smart_btn)
 
-			
-			self.append([up_btn, dwn_btn, on_btn, bst_50_btn, bst_52_btn])
+		
+			self.append([up_btn, dwn_btn, on_btn, smart_btn])
 
 			# Buffervat
 			buff_cont = JSEM_Rect(self, top='22%', left='72%', width='28%', height='70%', background_color='black', style=rect_style, config=rect_config)
@@ -509,9 +478,9 @@ class Hp_widget(Container):
 			
 			# Bottomline
 			btmline = JSEM_Rect(self, top='94%', left='0%', width='100%', height='6%', background_color='grey', style=rect_style, config=rect_config)
-			time = JSEM_Label(btmline, dps[EBUS_Timestamp_1], config=lbl_config, style=lbl_style, top='10%', left='3%', width='35%', height='80%',
-									value_font_weight='bold', value_font_size='0.7em', show_unit=False, value_width='100%')
-			temp = JSEM_Label(btmline, dps[BuitenTemperatuur1], config=lbl_config, style=lbl_style, top='10%', left='85%', width='15%', height='80%',
+			# time = JSEM_Label(btmline, dps[EBUS_Timestamp_1], config=lbl_config, style=lbl_style, top='10%', left='3%', width='35%', height='80%',
+			# 						value_font_weight='bold', value_font_size='0.7em', show_unit=False, value_width='100%')
+			temp = JSEM_Label(btmline, dps[BuitenTemperatuur_act], config=lbl_config, style=lbl_style, top='10%', left='85%', width='15%', height='80%',
 									value_font_weight='bold', value_font_size='0.7em')
 									
 									

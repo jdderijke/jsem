@@ -52,7 +52,7 @@ CWD=(os.path.dirname(os.path.realpath(__file__)))
 
 
 def main(args):
-	CONN=sqlite3.connect(CWD+DBFILE, uri=True)
+	CONN=sqlite3.connect(DBFILE, uri=True)
 	query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL"
 	dp_df = pd.read_sql_query(query, CONN)
 	# print (dp_df)

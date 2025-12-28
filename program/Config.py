@@ -15,8 +15,8 @@ Loglevel = logging.INFO
 # Loglevel = logging.ERROR
 
 # System settings
-# ENVIRONMENT = Environment.Productie
-ENVIRONMENT = Environment.Test_full
+ENVIRONMENT = Environment.Productie
+# ENVIRONMENT = Environment.Test_full
 # ENVIRONMENT = Environment.Test_data
 
 BTW_PERC = 21
@@ -66,8 +66,8 @@ METEOSERVER_URL = "https://data.meteoserver.nl/api/uurverwachting_gfs.php?%s&key
 
 
 # Heatpump planning settings
-HP_POWER = 15.7		# Kw
-HP_USAGE = 3.9		# Kw
+HP_POWER = 17.6		# Kw
+HP_USAGE = 4.9		# Kw
 # BUF_MIN = 3.0		# Kwh
 # BUF_MAX = 38.0		# Kwh
 
@@ -89,11 +89,11 @@ MAX_DEVIATION = 0.20		# max deviation for the ws52 watersetpoints (min-avg-max),
 
 frcst_timeshift = 0		# aantal uren dat de temp_frcst wordt vervroegd (-) of verlaat (+) voor het runnen van het predictie model van de Heating Power
 
-# de grenswaarden voor temp_frcst waarONDER de correcties worden toegepast van frcst_tempcorrvalues, 
-# dus bij temp_frcst <= 2.0 gr Celcius: 2.5 graden erbij optellen
-frcst_tempcorrtresholds = 	[2.0, 7.0, 11.0]
-# aantal graden (Celcius) wat opgeteld moet worden bij de temp_frcst voor het predictiemodel Heating Power
-frcst_tempcorrvalues = 		[2.5, 1.5, 1.0, 0.0]
+# # de grenswaarden voor temp_frcst waarONDER de correcties worden toegepast van frcst_tempcorrvalues,
+# # dus bij temp_frcst <= 2.0 gr Celcius: 2.5 graden erbij optellen
+# frcst_tempcorrtresholds = 	[2.0, 7.0, 11.0]
+# # aantal graden (Celcius) wat opgeteld moet worden bij de temp_frcst voor het predictiemodel Heating Power
+# frcst_tempcorrvalues = 		[2.5, 1.5, 1.0, 0.0]
 
 # Eem geheel andere benadering is om de frcst_temp en de echte BuitenTemperatuur1 over de afgelopen x uren te vergelijken en het 
 # gemiddelde verschil te gebruiken als correctie op de frcst

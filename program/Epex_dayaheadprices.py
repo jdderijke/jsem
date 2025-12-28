@@ -61,7 +61,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from Common_Routines import Waitkey
+from JSEM_Commons import Waitkey
 
 CWD=(os.path.dirname(os.path.realpath(__file__)))
 DBFILE = "/Database/JSEM.db"

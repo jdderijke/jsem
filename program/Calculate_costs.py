@@ -35,7 +35,7 @@ from Common_Enums import *
 from LogRoutines import Logger
 from Config import DAYAHEAD_PRICES, ENVIRONMENT, LOGFILELOCATION, Loglevel, DB_RETRIES, DB_WAITBETWEENRETRIES, BTW_PERC
 
-from Common_Routines import cursor_to_dict
+from JSEM_Commons import cursor_to_dict
 import sqlite3
 from datetime import datetime
 from dateutil.relativedelta import relativedelta

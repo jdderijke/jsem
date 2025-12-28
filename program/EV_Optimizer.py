@@ -34,7 +34,7 @@ import logging
 from LogRoutines import Logger
 from Config import LOGFILELOCATION, Loglevel
 from Config import DBFILE
-from Common_Routines import get_input, get_newest_file
+from JSEM_Commons import get_input
 from Common_Data import DATAPOINTS_NAME, DATAPOINTS_ID
 from operator import itemgetter
 from Datapoint_IDs import *
@@ -132,7 +132,7 @@ def clr_ev_plan(running_standalone=False, **kwargs):
 
 def make_ev_plan(running_standalone=False, **kwargs):
 	from DB_Routines import get_value_from_database, store_df_in_database
-	from Common_Routines import get_all_epexinfo
+	from JSEM_Commons import get_all_epexinfo
 	
 	msg = kwargs.get('msg',None)
 	if msg: Logger.info("message passed to routine: %s" % msg)

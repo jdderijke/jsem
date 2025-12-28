@@ -36,8 +36,9 @@ import urllib3
 from bs4 import BeautifulSoup
 import json
 
-from Config import DAYAHEAD_PRICES, CHROMEDRIVER_LOCATION, ENVIRONMENT, LOGFILELOCATION, Loglevel
-from Common_Routines import Waitkey
+#  CHROMEDRIVER_LOCATION,
+from Config import DAYAHEAD_PRICES,ENVIRONMENT, LOGFILELOCATION, Loglevel
+from JSEM_Commons import Waitkey
 import pandas as pd
 from DB_Routines import get_df_from_database, store_df_in_database
 from datetime import date, datetime, timedelta, timezone
@@ -53,7 +54,8 @@ CWD=(os.path.dirname(os.path.realpath(__file__)))
 # url = "https://mijn.easyenergy.com/nl/api/tariff/getapxtariffs?startTimestamp=2023-07-17T22%3A00%3A00.000Z&endTimestamp=2023-07-18T22%3A00%3A00.000Z&includeVat=false"
 # url = "https://mijn.easyenergy.com/nl/api/tariff/getlebatariffs?startTimestamp=2020-04-29T22%3A00%3A00.000Z&endTimestamp=2020-04-30T22%3A00%3A00.000Z&includeVat=false"
 
-headers = {'electricity': 'getapxtariffs', 'gas':'getlebatariffs'}
+HEADERS = {'electricity': 'getapxtariffs', 'gas':'getlebatariffs'}
+PROVIDERS = ['easyenergy', 'energyzero']
 
 leba_data = 370
 epex_data = 214
@@ -71,11 +73,11 @@ def get_epex_leba_data	(
 						port=None
 						):
 	try:
-		if header == headers['electricity']: 
+		if header == HEADERS['electricity']:
 			data_column_header = 'epex_data'
 			usageType = 1
 			dpID = epex_data
-		elif header == headers['gas']: 
+		elif header == HEADERS['gas']:
 			data_column_header = 'leba_data'
 			usageType = 4
 			dpID = leba_data
@@ -162,7 +164,7 @@ def get_epex_leba_data	(
 			filename = '%s-%s %s-%s.csv' % \
 				(data_column_header, 'inclBTW' if incl_vat else 'exclBTW', 
 				start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d'))
-			outdir = CWD + DAYAHEAD_PRICES
+			outdir = DAYAHEAD_PRICES
 			if not os.path.exists(outdir): os.mkdir(outdir)
 			fullname = os.path.join(outdir, filename)  
 			Logger.info ("Saving csv file as %s" % fullname)  
@@ -199,10 +201,10 @@ def main(*args, **kwargs):
 			# er zijn argumenten met de commandline meegegeven, dus automatisch script
 			mode = kwargs.get('mode', "electricity").lower()
 			Logger.info('Mode = %s .... ' % mode)
-			if mode not in headers: 
+			if mode not in HEADERS:
 				Logger.error('%s --Illegal mode... should be electricity or gas' % mode)
 				return
-			header = headers[mode]
+			header = HEADERS[mode]
 			
 			start_date = kwargs.get('start_date', datetime.now())
 			start_date = conv_2_dt(start_date)
@@ -219,7 +221,7 @@ def main(*args, **kwargs):
 			Logger.info('Get_epex_leba_data called with start_date: %s, end_date: %s, make_csv: %s, store_in_db: %s, incl_vat: %s' %
 							(start_date,end_date,make_csv,store_in_db,incl_vat))
 
-			for provider in ['easyenergy', 'energyzero']:
+			for provider in PROVIDERS:
 				if get_epex_leba_data(	header=header, provider=provider, start_date=start_date, end_date=end_date, 
 										make_csv=make_csv, store_in_db=store_in_db, incl_vat=incl_vat):
 					break
@@ -228,8 +230,8 @@ def main(*args, **kwargs):
 		else:
 			# er zijn geen argumenten met de commandline meegeven...dus interactief
 			Logger.info('Started from editor, interactive.....')
-			header = headers['electricity']
-			if input('Electricity (E) or Gas (G) prices (default E) : ').lower()=='g': header = headers['gas']
+			header = HEADERS['electricity']
+			if input('Electricity (E) or Gas (G) prices (default E) : ').lower()=='g': header = HEADERS['gas']
 			
 			start_date: datetime = datetime.now()
 			end_date: datetime = datetime(2099,12,31,0,0,0)
@@ -239,9 +241,9 @@ def main(*args, **kwargs):
 			enddate_str = input("End date (if not %s) :" % end_date.strftime("%Y-%m-%d"))
 			if enddate_str: end_date = datetime.strptime(enddate_str, "%Y-%m-%d")
 			
-			for provider in ['easyenergy', 'energyzero']:
+			for provider in PROVIDERS:
 				if get_epex_leba_data(	header=header, provider=provider, start_date=start_date, end_date=end_date, 
-										make_csv=False, store_in_db=True, incl_vat=False):
+										make_csv=True, store_in_db=True, incl_vat=False):
 					break
 										 
 

@@ -75,8 +75,7 @@ meteofields = dict(
 					icoon=(frcst_icoon, 'string'))
 					
 	
-def get_meteoserver_forecast(	running_standalone=False,
-								location=None, 
+def get_meteoserver_forecast(	location=None,
 								make_csv=True, 
 								store_in_db=False, 
 								use_remote_JSEM_DB=False, 
@@ -123,7 +122,7 @@ def get_meteoserver_forecast(	running_standalone=False,
 	if make_csv:
 		# Haal de tijd informatie uit de EERSTE timestamp in de JSON data
 		now = datetime.fromtimestamp(int(json_data["data"][0]["tijd"]))
-		outdir = CWD + METEOSERVER_FORECASTS
+		outdir = METEOSERVER_FORECASTS
 		csvname = found_location
 		outname = now.strftime("%Y%m%d%H%M_Forecast_") + csvname + '.csv'
 		if not os.path.exists(outdir): os.mkdir(outdir)
@@ -177,8 +176,7 @@ def main(*args, **kwargs):
 			for retry in range(max_retries):
 				try:
 					Logger.info(f'Attempt {retry+1}')
-					result = get_meteoserver_forecast(	running_standalone=True,
-														msg='From crontab or CLI...',
+					result = get_meteoserver_forecast(	msg='From crontab or CLI...',
 														location=location, 
 														make_csv=make_csv,
 														store_in_db=store_in_db) 
@@ -195,8 +193,7 @@ def main(*args, **kwargs):
 			store_in_db = (input("Wilt u de resultaten als Forecast opslaan in de JSEM database? (J/n)").lower() in ["j", ""])
 			
 			# print ("getting forecast for location: %s, pc: %s, file: %s, and make_csv: %s" % (location, pc, json_file, make_csv))
-			result = get_meteoserver_forecast(	running_standalone=False,
-												msg='From interactive session...',
+			result = get_meteoserver_forecast(	msg='From interactive session...',
 												location=select, 
 												make_csv=make_csv,
 												store_in_db=store_in_db) 

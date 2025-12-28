@@ -1,35 +1,31 @@
+import socket
 
- 
 from Config import MsgQ_Alarm, ENVIRONMENT
 from Common_Enums import *
 from enum import Enum
 
-# import socket
-from Emulators import Socket_Stub, Modbus_Stub, Serial_Stub, Shelly_Stub
-
 import threading
 import time
 import re
-# import errno
 import sys
 from datetime import datetime
 # from dateutil.relativedelta import relativedelta
 import random
 import serial
-from selenium import webdriver
-from bs4 import BeautifulSoup
 
 from Conversion_Routines import ByteArrayToHexString, From_ByteArray_converter, To_ByteArray_converter, \
 	HexStringToByteArray
 from DataPoint import Datapoint
 from LogRoutines import Logger
 from DB_Routines import populate_interface, get_pollmessages_from_database
-# import Conversion_Routines
-# from Conversion_Routines import ByteToHexString, ByteArrayToHexString, HexStringToByteArray, From_ByteArray_converter, To_ByteArray_converter
-from Common_Routines import get_ip_address, Is_NOE, IsNot_NOE, dump, Waitkey, string_builder, Calculate_Timerset, spincursor
+from JSEM_Commons import get_ip_address, Is_NOE, IsNot_NOE, dump, Waitkey, string_builder, Calculate_Timerset, spincursor
 from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, CATEGORY_ID, CATEGORY_NAME
 import remi.gui as gui
 import errno
+
+from program import sdm_modbus
+from sdm_modbus import *
+from pyShelly import pyShelly
 
 
 
@@ -109,7 +105,8 @@ class BaseInterface(object):
 		
 		# populate_interface adds properties to this interface object based on the DB table interface fields
 		populate_interface(self, name=self.name)
-		
+		# If a port is specified... make sure its type int .... None is also allowed
+		if self.port: self.port = int(self.port)
 		# Now overrule any property if it appears in kwargs and add missing properties
 		for prop in kwargs:
 			setattr(self, prop, kwargs.get(prop, None))
@@ -318,8 +315,8 @@ class BaseInterface(object):
 			Logger.info(f'{self.name}-- Connecting to device....')
 			self.connstate = ConnState.Connecting
 			
-			if self.conn_type in ["EBUS-TCP", "MBUS-TCP", "RS485-TCP", "DEFAULT-TCP"]:
-				self.TCPclientSock = Socket_Stub(Socket_Stub.AF_INET, Socket_Stub.SOCK_STREAM, busfree_byte=self.bus_free, echo=True)
+			if self.conn_type in ["MBUS-TCP", "RS485-TCP", "DEFAULT-TCP"]:
+				self.TCPclientSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 				self.TCPclientSock.settimeout(self.timeout)
 				for tries in range(self.maxretries):
 					try:
@@ -329,34 +326,29 @@ class BaseInterface(object):
 					except Exception as err:
 						time.sleep(0.5)
 						
-			elif self.conn_type in ["EBUS-UDP", "MBUS-UDP"]:
-				self.UDPclientSock = Socket_Stub(Socket_Stub.AF_INET, Socket_Stub.SOCK_DGRAM, busfree_byte=self.bus_free, echo=True)
-				self.UDPclientSock.settimeout(self.timeout)
-				for tries in range(self.maxretries):
-					try:
-						# One difference with TCP is that we will have to bind our declared IP address and port number to our newly declared serverSock
-						# If NO ip address is given: listen to the specified port on all interfaces
-						# If an ip adress is given it must be the ip address of the RECEIVER, not de sender, i.e. my ip_address
-						self.UDPclientSock.bind((get_ip_address(), self.port))
-						self.connstate = ConnState.Connected
-						break
-					except Exception as err:
-						time.sleep(0.5)
-						
+					
 			elif self.conn_type == "MODBUS-TCP":
 				for tries in range(self.maxretries):
 					try:
-						self.Modbus_Conn = Modbus_Stub(device_type=self.device_type, host=self.address,port=self.port,timeout=self.timeout,framer=None,
-														   unit=self.device_sub_addr,udp=False, awake_registername=self.awake_registername)
+						initializer = getattr(sdm_modbus, self.device_type)
+						self.Modbus_Conn = initializer(
+							host=self.address,
+							port=self.port,
+							timeout=self.timeout,
+							framer=None,
+							unit=self.device_sub_addr,
+							udp=False
+						)
 						self.connstate = ConnState.Connected
 						break
 					except Exception as err:
+						Logger.error(
+							f'{self.name}-- Problem connecting {self.conn_type}-{self.address}:{self.port} attempt {tries + 1}, {err}')
 						time.sleep(0.5)
-			
 						
 			elif self.conn_type == "P1-SERIAL":
 				# Configure serial Com port
-				self.Ser = Serial_Stub(baudrate=self.baudrate, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE)
+				self.Ser = serial.Serial()
 				self.Ser.baudrate = self.baudrate
 				self.Ser.bytesize=getattr(serial,self.bytesize)
 				self.Ser.parity=getattr(serial,self.parity)
@@ -364,31 +356,33 @@ class BaseInterface(object):
 				self.Ser.xonxoff=self.xonxoff
 				self.Ser.rtscts=self.rtscts
 				self.Ser.timeout=self.timeout
-				# bit confusing but with port a serial COM port is expected, i.e. /dev/ttyUSB0...
+				# beetje verwarrend maar met port wordt hier een serial COM port bedoeld, oftewel een adres...
 				self.Ser.port = self.address
 				for tries in range(self.maxretries):
 					try:
 						# Now try to Open the COM port
 						self.Ser.open()
 						self.connstate = ConnState.Connected
+						Logger.info(f'{self}')
 						break
 					except Exception as err:
+						Logger.error (f'{self.name}-- Problem connecting {self.conn_type}-{self.address} attempt {tries+1}, {err}')
 						time.sleep(0.5)
 						
 			elif self.conn_type == "SHELLY-TCP":
 				# define a new Shelly interface
 				for tries in range(self.maxretries):
-					self.Shelly = Shelly_Stub()
+					self.Shelly = pyShelly()
 					try:
 						self.Shelly.start()
 						# self.shelly.discover()
-						self.Shelly.add_device_by_ip(self.address, 'IP-addr')  		# this takes some time
+						self.Shelly.add_device_by_ip(self.address, 'IP-addr')  # this takes some time
 						# Now the device list should get filled with logical devices on this address, a Relay has 3... 1 relay and 2 switches
 						total_time = 0.0
 						with tqdm(total=self.timeout) as pbar:
 							while len(self.Shelly.devices) < self.device_count:
 								loop_start = time.time()
-								if  total_time > self.timeout:
+								if total_time > self.timeout:
 									raise Exception('Timeout reached')
 								else:
 									time.sleep(0.1)
@@ -397,12 +391,17 @@ class BaseInterface(object):
 								total_time += loop_time
 							# Finish, fill up the pbar to 100%
 							pbar.update(self.timeout - total_time)
-							
-						Logger.info(f'Found the following devices on address {self.address}: {[x.device_type for x in self.Shelly.devices]}')
+						
+						Logger.info(
+							f'Found the following devices on address {self.address}: {[x.device_type for x in self.Shelly.devices]}')
 						self.connstate = ConnState.Connected
+						Logger.info(f'{self}')
 						break
 					except Exception as err:
+						Logger.error(
+							f'{self.name}-- Problem connecting {self.conn_type}-{self.address} attempt {tries + 1}, {err}')
 						time.sleep(0.5)
+				
 				
 			if not self.connstate == ConnState.Connected:
 				self.connstate = ConnState.DisConnected
@@ -477,7 +476,7 @@ class BaseInterface(object):
 			try:
 				if conn_type in ["EBUS-TCP", "MBUS-TCP", "RS485-TCP", "DEFAULT-TCP"]:
 					# shutdown forces all processes to disconnect from the socket and sends an EOF to the peer, but you still need to close the socket
-					self.TCPclientSock.shutdown(Socket_Stub.SHUT_RDWR)
+					self.TCPclientSock.shutdown(socket.SHUT_RDWR)
 					self.TCPclientSock.close()
 					self.TCPclientSock=None
 				elif conn_type in ["EBUS-UDP"]:
@@ -741,9 +740,6 @@ class BaseInterface(object):
 		return messagestring
 
 
-# from pyModbusTCP.client import ModbusClient
-# from pyModbusTCP.utils import decode_ieee, word_list_to_long, crc16
-import sdm_modbus
 
 class SdmModbusInterface(BaseInterface):
 	def __init__(self, *args, **kwargs):
@@ -808,7 +804,10 @@ class SdmModbusInterface(BaseInterface):
 		self.stop_sending = False
 		try:
 			while not self.stop_sending:
-				if not self.Modbus_Conn.connected(): raise ConnectionError
+				if not self.Modbus_Conn.connected():
+					self.Modbus_Conn.connect()
+					time.sleep(1.0)
+					
 
 				self.sndstate=Sndstate.Waiting_For_MsgToSend
 				self.recstate = Recstate.Waiting_For_MsgToReceive
@@ -837,23 +836,30 @@ class SdmModbusInterface(BaseInterface):
 				self.recstate = Recstate.Receiving_Msg
 				
 				result = {}
-				if key.lower() in ['all','readall','read_all','alles', 'all_registers', 'alle_registers']:
-					result = self.Modbus_Conn.read_all(sdm_modbus.registerType.INPUT)
-					result.update(self.Modbus_Conn.read_all(sdm_modbus.registerType.HOLDING))
-				elif key.lower() in ['all_inputs', 'input', 'inputs', 'inputregisters', 'input_registers']:
-					result = self.Modbus_Conn.read_all(sdm_modbus.registerType.INPUT)
-				elif key.lower() in ['all_holdings', 'holdings', 'holding', 'holdingregisters', 'holding_registers']:
-					result = self.Modbus_Conn.read_all(sdm_modbus.registerType.HOLDING)
-				else:
-					result = {key:self.Modbus_Conn.read(key)}
-
+				try:
+					if key.lower() in ['all','readall','read_all','alles', 'all_registers', 'alle_registers']:
+						result = self.Modbus_Conn.read_all(sdm_modbus.registerType.INPUT, scaling=True)
+						result.update(self.Modbus_Conn.read_all(sdm_modbus.registerType.HOLDING, scaling=True))
+						result.update(self.Modbus_Conn.read_all(sdm_modbus.registerType.COIL, scaling=False))
+						result.update(self.Modbus_Conn.read_all(sdm_modbus.registerType.DISCR_INPUT, scaling=False))
+					elif key.lower() in ['all_inputs', 'input', 'inputs', 'inputregisters', 'input_registers']:
+						result = self.Modbus_Conn.read_all(sdm_modbus.registerType.INPUT, scaling=True)
+					elif key.lower() in ['all_holdings', 'holdings', 'holding', 'holdingregisters', 'holding_registers']:
+						result = self.Modbus_Conn.read_all(sdm_modbus.registerType.HOLDING, scaling=True)
+					else:
+						result = {key:self.Modbus_Conn.read(key)}
+				except ConnectionError:
+					raise
+				except Exception as err:
+					raise err
+				
 				if self.localecho_send_messages: 
 					# print(send_header + sendbytes)
 					self.update_MON_widget(f'Poll {key} ->', style=self.send_style)
 				if result: 
 					self.recv(result)
 					self.recstate = Recstate.Deconstructing_Msg
-				
+			
 		except ConnectionError as err:
 			Logger.error(f'{self.name}-- ConnectionError, trying to reconnect.')
 			self.disconnect(reconnect=True)
@@ -893,14 +899,18 @@ class SdmModbusInterface(BaseInterface):
 
 	def decode_msg(self, value, dp_ID):
 		'''
-		Alle noodzakelijke decoding is al gedaan door de sdmModbus module, hier wordt alleen de waarde weggeschreven naar het datapoint
+		Alle noodzakelijke decoding is al gedaan door de sdmModbus module, hier wordt alleen de waarde weggeschreven
+		naar het datapoint, in het datapoint datatype
 		'''
 		try:
 			dp:Datapoint =DATAPOINTS_ID[dp_ID]
-			if value is not None: 
-				nwvalue = dp.datatype(str(value))
-				if dp.log_messages: Logger.info(f'Logmessages:{dp.name} : {value} Decoded into {nwvalue}')
-				dp.write_INTFC_value(nwvalue = nwvalue) 
+			if value is not None:
+				try:
+					nwvalue = dp.datatype(str(value))
+					if dp.log_messages: Logger.info(f'Logmessages:{dp.name} : {value} Decoded into {nwvalue}')
+					dp.write_INTFC_value(nwvalue = nwvalue)
+				except ValueError:
+					Logger.info(f'{self.name}--Datapoint: {dp.name}-- Can not convert {value} into {dp.datatype}')
 				
 		except Exception as err:
 			Logger.exception(str(err))
@@ -918,9 +928,9 @@ class SdmModbusInterface(BaseInterface):
 			
 			# no need to add the message to the message queue for the send routine, we can directly write to the Modbus_Conn
 			self.Modbus_Conn.write(dp.searchkey, nwvalue)
-			# and immediately (after delay) poll to see the result reflected..
-			time.sleep(1.0)
-			self.make_poll_telgr(dp)
+			# # and immediately (after delay) poll to see the result reflected..
+			# time.sleep(1.0)
+			# self.make_poll_telgr(dp)
 		except Exception as err:
 			Logger.exception(str(err))
 		
@@ -1017,293 +1027,7 @@ class ShellyRelayInterface(BaseInterface):
 		time.sleep(0.2)
 		self.recstate = Recstate.Waiting_For_MsgToReceive
 
-
-class DeltaInterface(BaseInterface):
-	def __init__(self, *args, **kwargs):
-		# set the interface_type field, as we maybe want to use the name property for more specific names
-		self.interface_type = self.__class__.__name__
-		super().__init__(*args, **kwargs)
-
-
-		self.bus_free = bytearray([])
-		self.localecho_send_messages = True			# Need to echo send messages to the monitor...
-		self.sk_index = 0							# Search_key startindex in the receive string
-		self.sk_format = SearchkeyFormat.HEXstring	# Format the searchkey is written in
-
 		
-		self.display_format = "HEX"				# display definition for live comm monitor
-		
-		self.onconnect_start_receiver=True
-		self.onconnect_start_sender=True
-		self.onconnect_start_poller=True
-		if kwargs.get("auto_start", False): self.connect()
-
-
-	def recv(self):
-		'''
-		Specifiek een kleine receiver voor Delta Interface, alleen voor TCP, niet UDP of serial op dit moment
-		'''
-		if ENVIRONMENT not in [Environment.Productie, Environment.Test_full]: return
-		
-		if self.connstate != ConnState.Connected:
-			Logger.error(f'{self.name}-- Trying to call receive while not connected, first connect!')
-			return
-		
-		self.stop_receiving = False
-		# if ENVIRONMENT != Environment.Productie:
-		# 	while not self.stop_receiving:
-		# 		time.sleep(0.1)		# loop to simulate running thread
-		# 	return
-
-
-		TCP_BUFFER_SIZE = 1024    # Normally 1024
-		try:
-			self.TCPclientSock.setblocking(False)
-			while not self.stop_receiving:
-				try:
-					self.recstate=Recstate.Waiting_For_MsgToReceive
-					data = self.TCPclientSock.recv(TCP_BUFFER_SIZE)
-					self.recstate=Recstate.Receiving_Msg
-					# print ('data = %s' % data)
-					# some messages need pre-processing, implement in specific interface classes
-					msgbytes = self.pre_process_message(data)
-					# see if this message can be related to a datapoint
-					dp_IDs, sk_indexes = self.get_datapoints_from_msg(msgbytes)
-					if dp_IDs != []:
-						self.recstate=Recstate.Deconstructing_Msg
-						# we found at least one datapoint connected to this message
-						self.update_MON_widget(data, style=self.dp_style)
-						for dp_ID in dp_IDs:
-							dp=DATAPOINTS_ID[dp_ID]
-							# Check if we need to log the messages for these datapoints for testing purposes
-							if dp.log_messages: Logger.info("%s--%s--bytes received: %s" % (self.name, dp.name, ByteArrayToHexString(data)))
-							self.decode_msg(msgbytes, dp_ID, sk_indexes)
-						else:
-							# Do not process this message
-							pass
-					else:
-						# No datapoint found, this message is unknown to us
-						self.update_MON_widget(data, style=self.unknown_style)
-
-				except ConnectionError as err:
-					Logger.exception ("%s--%s" % (self.name, err))
-					self.disconnect(reconnect=True)
-					return
-				except IOError as err:
-					if err.errno == 11:
-						# 11 is "resource temporarily unavailable" occurs when reading in a non blocking manner from an empty buffer....
-						# always wait a little after detecting an empty buffer before resuming socket reads....
-						time.sleep(0.05)
-					else:
-						Logger.exception ("%s--%s" % (self.name, err))
-						self.disconnect(reconnect=False)
-						return
-				except Exception as err:
-					Logger.exception ("%s--%s" % (self.name, err))
-					self.disconnect(reconnect=False)
-					return
-					
-		except Exception as err:
-			Logger.exception ("%s--%s" % (self.name, err))
-		finally:
-			# if we ever arrive here.... a disconnect has been requested...
-			self.recv_thread = None
-			self.recstate=Recstate.Receiver_Stopped
-
-
-	def send(self):
-		'''
-		Specifiek een kleine receiver voor Delta Interface, alleen voor TCP, niet UDP of serial op dit moment
-		'''
-		if ENVIRONMENT not in [Environment.Productie, Environment.Test_full]: return
-		
-		if self.connstate != ConnState.Connected:
-			Logger.error(f'{self.name}-- Trying to call send while not connected, first connect!')
-			return
-
-		self.stop_sending = False
-		# if ENVIRONMENT != Environment.Productie:
-		# 	if ENVIRONMENT == Environment.Test_full:
-		# 		while not self.stop_sending:
-		# 			self.sndstate = Sndstate.Waiting_For_MsgToSend
-		# 			if self.msgQ:
-		# 				self.sndstate = Sndstate.Sending_Msg
-		# 				sendbytes, ack_recv, msgtype = self.get_nxtmsg()
-		# 				Logger.info(f'{self.name}-- Send message {sendbytes}, messagetype {msgtype}')
-		# 				if self.localecho_send_messages: self.update_MON_widget(sendbytes, style=self.send_style)
-		# 			time.sleep(0.1)				# loop to simulate running thread
-		# 	return
-
-
-		try:
-			self.sndstate=Sndstate.Waiting_For_MsgToSend
-			while not self.stop_sending:
-				# haal de volgende message uit de queue
-				sendbytes, ack_recv, msgtype = self.get_nxtmsg()
-				if not sendbytes: 
-					# niets te doen.. loop
-					time.sleep(0.5)
-					continue
-				self.sndstate=Sndstate.Sending_Msg
-				# print ("TCP message send: " + ByteArrayToHexString(ByteArray))
-				self.TCPclientSock.send(sendbytes)
-				# boodschappen die over TCP worden verstuurd worden door de receiver NIET gezien, dus die moeten hier nog verstuurd worden
-				# naar de monitor
-				if self.localecho_send_messages: self.update_MON_widget(sendbytes, style=self.send_style)
-				# always wait a little after detecting an empty buffer before resuming socket reads....
-				time.sleep(0.05) 
-				self.sndstate=Sndstate.Waiting_For_MsgToSend
-		except ConnectionError as err:
-			Logger.error(f'{self.name}-- {err}, trying to reconnect')
-			self.disconnect(reconnect=True)
-		except Exception as err:
-			Logger.error(f'{self.name}-- {err}, disconnecting')
-			self.disconnect(reconnect=False)
-		finally:
-			self.sndstate=Sndstate.Sender_Stopped
-				
-				
-				
-				
-		
-
-	def get_datapoints_from_msg(self, BA_msg):
-		# Messagestring is still a bytearray here!
-		try:
-			# de start van de searchkey waarmee de datapoint geidentificeerd kan worden kan gevonden worden door een INDEX
-			start_index = self.sk_index
-			# we kunnen geen end_index bepalen vanwege wisselende keystring lengtes, dus -> reverse_fitting doen')
-			dp_ids=[]
-			for key in self.searchkeys:
-				if self.sk_format == SearchkeyFormat.HEXstring: keybytes = bytearray.fromhex(key)
-				elif self.sk_format == SearchkeyFormat.ASCII: keybytes = bytearray(key.encode())
-				if BA_msg.find(keybytes) == start_index:
-					dp_ids = self.searchkeys[key]
-					end_index = start_index + len(keybytes)
-					# print ("RevFit: Datapoints found", dp_ids)
-					return dp_ids,[start_index,end_index]
-					
-			# als we hier terecht komen -> geen fit gevonden
-			return [],[]
-					
-		except Exception as err:
-			Logger.error(f'{self.name}-- Error getting datapoint from msg: {BA_msg} - HEX = {ByteArrayToHexString(BA_msg)}')
-			Logger.exception(str(err)) 
-			return [],[] 
-
-
-	def decode_msg(self, BA_msg, dp_ID, sk_indexes):
-		# de binnenkomende message is hier nog steed de complete bytearray....
-		dp = None
-		try:
-			dp=DATAPOINTS_ID[dp_ID]
-			# the referencepoint is the end_index from the sk_indexes found by the get_datapoints_from_msg routine
-			ref_index = sk_indexes[1]
-			try:
-				BA_databytes = BA_msg[ref_index + dp.st_index: ref_index + dp.st_index + dp.length]
-			except IndexError:
-				raise Exception(f'{self.name}-- Error decoding, index out of range: {BA_msg}, HEX = {ByteArrayToHexString(BA_msg)}')
-
-			if Is_NOE(dp.datadecoder): raise ValueError("%s--Error decoding, no datadecoder specified: %s, HEX = %s" % (self.name, BA_msg, ByteArrayToHexString(BA_msg)))
-			
-			# print("data send to the datadecoder: " + ByteArrayToHexString(BA_databytes))
-			result = From_ByteArray_converter(dp.datadecoder.strip(), BA_databytes)
-			# print(dp.name + "data received from datadecoder: " + str(result))
-			# force result into the correct datatype
-			if result is not None:
-				try:
-					dp.write_INTFC_value(nwvalue=dp.datatype(str(result))) 
-				except:
-					raise ValueError("%s--Datapoint %s, the from_ByteArray_converter %s returned %s from databytes %s." % 
-										(self.name, dp.name, dp.datadecoder, result, BA_databytes))
-			else:
-				Logger.debug("%s--Datapoint %s, the from_ByteArray_converter %s returned %s from databytes %s." % 
-									(self.name, dp.name, dp.datadecoder, result, BA_databytes))
-				# print (dp.name + ":" + str(dp.value))
-		except Exception as err:
-			Logger.exception(str(err))
-			return
-
-		
-	def make_poll_telgr(self,definition):
-		'''
-		Master to slave message definition:
-		Byte # 		Data byte 			Description
-		1 			‘STX’ 				Start of protocol
-		2 			‘ENQ’ 				Master sending request
-		3 			address 			Address of receiving device
-		4 			# of data bytes 	Number of data included commands
-		5 			command 			Command send to slave
-		6 			sub command 		Sub command send to slave
-		N 			data 				N bytes of data
-		N + 1 		CRC low byte 		Low byte of checksum
-		N + 2 		CRC high byte 		High byte of checksum
-		N + 3 ‘		ETX’ 				End of protocol
-		
-		Character 	ASCII (hex) Code 	Description
-		‘ENQ’ 		05 					Link request (Master only)
-		‘ACK’ 		06 					Slave accepting link (Slave only)
-		‘NAK’ 		15 					Slave not accepting link (Slave only)
-		‘STX’ 		02 					Message start
-		‘ETX’ 		03 					Message end
-			'''
-		# the first few bytes are the samen: ENQ-ADDR-#DATABYTES.... here 05 01 02 
-		# get and add the last TWO bytes from the searchkey (being THE COMMAND) in ASCII HEX format
-		sndbytes = bytearray(b'\x05\x01\x02') + bytearray.fromhex(definition.searchkey.strip()[-5:])
-		crcbytes = self.calc_crc(sndbytes)
-		sndbytes = bytearray(b'\x02') + sndbytes + crcbytes + bytearray(b'\x03')
-		Logger.debug(f'{self.name}-- Created Poll message {ByteArrayToHexString(sndbytes)}')
-		# add the message to the message queue for the send routine, but only if it is not None (empty)
-		self.add_msg(sndbytes, acknowledge_receipt=False, msgtype=MsgType.PollMessage)
-		
-	def make_command_telgr(self, dp, nwvalue):
-		# print ("DeltaInterface.make_command_telgr called")
-		try:
-			# make sure the nwvalue has the correct datatype
-			nwvalue = dp.datatype(nwvalue)
-			# nieuw te ontwikkelen functie.....
-			# nwvalue = reverse_calc_rule(dp, nwvalue)
-			nwvalue_bytearray = To_ByteArray_converter(dp.datadecoder, nwvalue)
-			# print ("Bytestr NEW Setpoint I: ", ByteArrayToHexString(nwvalue_bytearray))
-			# now make a bytearray of the command and subcommand part of the searchkey of the datapoint..
-			command_bytearray = HexStringToByteArray(dp.searchkey)[4:6]
-			# print ("reg_addr, reg_count = ", my_reg_addr, my_reg_count)
-			
-			sndbytes = command_bytearray + nwvalue_bytearray
-			sndbytes = bytearray([0x05, 0x01]) + bytearray([len(sndbytes)]) + sndbytes
-			sndbytes = bytearray([0x02]) + sndbytes + self.calc_crc(sndbytes) + bytearray([0x03])
-			
-			# print (ByteArrayToHexString(sndbytes))
-			# Waitkey()
-			
-			# add the message to the message queue for the send routine
-			self.add_msg(sndbytes, acknowledge_receipt=False, msgtype=MsgType.CommandMessage)
-		except Exception as err:
-			Logger.exception(str(err))
-		
-	def calc_crc(self,ByteArray):
-		initial = 0x0000
-		poly = 0xA001
-		
-		curcrc = initial
-		for byte in ByteArray:
-			# ^ operator means a bitwise exclusive OR (XOR)
-			curcrc = curcrc ^ byte
-			for i in range(8):
-				# & operator means a bitwise AND
-				lsb = curcrc & 0x0001
-				# A >> n operator means a bit shift RIGHT with n positions of A
-				curcrc = curcrc >> 1
-				if lsb == 0x0001:
-					# ^ operator means a bitwise exclusive OR (XOR)
-					curcrc = curcrc ^ poly
-		
-		# split the crc in 2 bytes lsb first
-		resultbyte1 = curcrc & 0x00ff
-		resultbyte2 = (curcrc & 0xff00) >> 8
-		
-		return bytearray([resultbyte1, resultbyte2])
-			
 		
 class MbusInterface(BaseInterface):
 	def __init__(self, *args, **kwargs):
@@ -1582,434 +1306,6 @@ class MbusInterface(BaseInterface):
 		return bytearray([tmpsum])
 			
 
-class EbusInterface(BaseInterface):
-	def __init__(self, *args, **kwargs):
-		'''
-		'''
-		# set the interface_type field, as we maybe want to use the name property for more specific names
-		self.interface_type = self.__class__.__name__
-		super().__init__(*args, **kwargs)
-		
-		self.bus_free = bytearray(b'\xAA')
-		""" Byte indicating a bus=free situation... """
-		self.ack_msg = bytearray(b'\x00')
-		""" Byte used by master or slave to acknowledge receipt of a message """
-		self.bus_free_count = 2
-		""" minimal number of bus_free bytes BEFORE a message will be send by this interface """
-		self.sk_index = 1
-		""" Search_key startindex in the receive string """
-		self.localecho_send_messages = False
-		""" No need to echo send messages to the monitor, the receive routine will see them on the bus anyway... """
-		self.sk_format = SearchkeyFormat.HEXstring
-		""" The format of the searchkey """
-		self.display_format = "HEX"
-		""" display definition for live comm monitor """
-		
-		self.onconnect_start_receiver=True
-		self.onconnect_start_sender=False
-		self.onconnect_start_poller=True
-		if kwargs.get("auto_start", False): self.connect()
-		
-
-
-	def send(self):
-		
-		# Trying to send something while not connected?...
-		if self.connstate != ConnState.Connected:
-			Logger.error(f'{self.name}-- Trying to call send while not connected, first connect!')
-			return
-			
-		BUFFER_SIZE = 1
-		sendbytes, ack_recv, msgtype = self.get_nxtmsg()
-		if sendbytes is not None:
-			self.sndstate = Sndstate.Sending_Msg
-			try:
-				if self.conn_type == "EBUS-TCP":
-					# Put the first byte on the bus....and see if it echoes back
-					self.TCPclientSock.send(sendbytes[0:1])
-					data = self.TCPclientSock.recv(BUFFER_SIZE)
-					if len(data) != BUFFER_SIZE or bytearray([data[0]]) != sendbytes[0:1]:
-						# transmission failed: push message back into the queue
-						raise ConnectionError
-					else:
-						# I have the bus... send rest of message
-						self.TCPclientSock.send(sendbytes[1:])
-						
-				elif self.conn_type == "EBUS-UDP":
-					self.UDPclientSock.sendto(sendbytes[0:1], (self.address,self.port))
-					data, addr = self.UDPclientSock.recvfrom(BUFFER_SIZE)
-					if bytearray([data]) != sendbytes[0:1]:
-						# transmission failed: push message back into the queue
-						raise ConnectionError
-					else:
-						# I have the bus... send rest of message
-						self.UDPclientSock.sendto(sendbytes[1:], (self.address,self.port))
-				
-				if self.localecho_send_messages: self.update_MON_widget(sendbytes, style=self.send_style)
-
-			except ConnectionError:
-				# transmission failed: push message back into the queue
-				self.add_msg(sendbytes, acknowledge_receipt=ack_recv, msgtype=msgtype)
-			except Exception as err:
-				Logger.exception(str(err))
-			finally:
-				self.sndstate=Sndstate.Waiting_For_MsgToSend
-
-
-	def recv(self):
-		if ENVIRONMENT not in [Environment.Productie, Environment.Test_full]: return
-		
-		if self.connstate != ConnState.Connected:
-			Logger.error(f'{self.name}-- Trying to call receive while not connected, first connect!')
-			return
-		
-		self.stop_receiving = False
-		# if ENVIRONMENT != Environment.Productie:
-		# 	if ENVIRONMENT == Environment.Test_full:
-		# 		while not self.stop_receiving:
-		# 			self.sndstate = Sndstate.Waiting_For_MsgToSend
-		# 			if self.msgQ:
-		# 				self.sndstate = Sndstate.Sending_Msg
-		# 				self.send()
-		# 			time.sleep(0.1)
-		# 	return
-			
-		BUFFER_SIZE = 1    # Normally 1024
-		try:
-			self.recstate=Recstate.Waiting_For_MsgToReceive
-			self.sndstate=Sndstate.Waiting_For_MsgToSend
-				
-			recvbytes = bytearray()
-			# create a FIFO buffer (length bus_free_count) that holds the last number of received bytes,
-			lastbytes = bytearray(b'\x00') * self.bus_free_count
-			self.TCPclientSock.setblocking(True)
-			
-			while not self.stop_receiving:
-				try:
-					if self.conn_type == "EBUS-TCP":
-						data = self.TCPclientSock.recv(BUFFER_SIZE)
-					if self.conn_type == "EBUS-UDP":
-						data, addr = self.UDPclientSock.recvfrom(BUFFER_SIZE)
-					# print(f'Ebus recv: data: {ByteArrayToHexString(data)}')
-					if len(data) != BUFFER_SIZE: Logger.error(
-						f'Received {len(data)} bytes where BUFFER_SIZE was {BUFFER_SIZE}')
-					for recvbyte in data:
-						# we scan every single byte.....
-						BA_byte = bytearray([recvbyte])
-						# remember last bytes
-						lastbytes = lastbytes[1:] + BA_byte
-						if BA_byte==self.bus_free and len(recvbytes)==0:
-							self.recstate=Recstate.Waiting_For_MsgToReceive
-							# skip busfree bytes, but check if the bus is free for us
-							if all(x==ord(b'\xAA') for x in lastbytes):
-								# bus is free, see if we need to send something
-								if self.msgQ: self.send()
-							self.update_MON_widget(BA_byte, style=self.idle_style)
-						elif BA_byte!=self.bus_free:
-							self.recstate=Recstate.Receiving_Msg
-							# plak net zolang bytes (niet zijnde bus_free) achter recvbytes totdat de bus_free langskomt....
-							# (the last byte in a message transmission)
-							recvbytes = recvbytes + BA_byte
-						elif BA_byte==self.bus_free and len(recvbytes)!=0:
-							self.recstate=Recstate.Deconstructing_Msg
-							# het laatste byte was inderdaad een bus_free, een message terminator...
-							# some messages need pre-processing, implement in specific interface classes
-							msgbytes = self.pre_process_message(recvbytes)
-							# see if this message can be related to a datapoint
-							dp_IDs, sk_indexes = self.get_datapoints_from_msg(msgbytes)
-							if dp_IDs != []:
-								# we found at least one datapoint connected to this message
-								self.update_MON_widget(recvbytes, style=self.dp_style)
-								# Check if we need to log the messages for these datapoints for testing purposes
-								for dp_ID in dp_IDs:
-									dp=DATAPOINTS_ID[dp_ID]
-									if dp.log_messages: Logger.info("%s: %s--bytes received: %s" % (self.name, dp.name, ByteArrayToHexString(recvbytes)))
-									# now check if the message is corrupt or not
-									if self.check_msg(msgbytes): self.decode_msg(msgbytes, dp_ID, sk_indexes)
-									else: Logger.error ("Corrupt message or datapoint definition? " + ByteArrayToHexString(msgbytes))
-							else:
-								# No datapoint found, this message is unknown to us
-								self.update_MON_widget(recvbytes, style=self.unknown_style)
-								
-							# RESET the message bytearray
-							recvbytes=bytearray()
-						else:
-							# de message is nog niet volledig binnen...blijf luisteren
-							pass
-							
-				except ConnectionError as err:
-					Logger.error ("ConnectionError in " + self.name + " receiver: " + str(err))
-					self.disconnect(reconnect=True)
-					return
-				except IOError as err:
-					Logger.error ("IOError in " + self.name + " receiver: " + str(err))
-					self.disconnect(reconnect=True)
-					break
-				except Exception as err:
-					Logger.exception ("General exception in " + self.name + " receiver: " + str(err))
-					self.disconnect(reconnect=False)
-					break
-					
-		except Exception as err:
-			Logger.exception ("General Exception for Interface  " + self.name + ": " + str(err))
-		finally:
-			# if we ever arrive here.... a disconnect has been requested...
-			self.recstate=Recstate.Receiver_Stopped
-			self.connstate=ConnState.DisConnecting
-
-
-
-		
-	def pre_process_message(self, msgbytes):
-		'''
-		For the EBUS interface specific...we need to replace A9 00 and A9 01 sequences 
-		by A9 and AA respectively, BEFORE we do ANY further processing!
-		'''
-		# Messagestring is still a bytearray here!
-		result=msgbytes.replace(b"\xA9\x01",b"\xAA")
-		result=result.replace(b"\xA9\x00",b"\xA9")
-		return result
-
-	def get_datapoints_from_msg(self, BA_msg):
-		# Messagestring is still a bytearray here!
-		try:
-			# de start van de searchkey waarmee de datapoint geidentificeerd kan worden kan gevonden worden door een INDEX
-			start_index = self.sk_index
-			# we kunnen geen end_index bepalen vanwege wisselende keystring lengtes, dus -> reverse_fitting doen')
-			dp_ids=[]
-			for key in self.searchkeys:
-				if self.sk_format == SearchkeyFormat.HEXstring: keybytes = bytearray.fromhex(key)
-				elif self.sk_format == SearchkeyFormat.ASCII: keybytes = bytearray(key.encode())
-				if BA_msg.find(keybytes) == start_index:
-					dp_ids = self.searchkeys[key]
-					end_index = start_index + len(keybytes)
-					# print ("RevFit: Datapoints found", dp_ids)
-					return dp_ids,[start_index,end_index]
-					
-			# als we hier terecht komen -> geen fit gevonden
-			return [],[]
-					
-		except Exception as err:
-			Logger.error(f'{self.name}-- Error getting datapoint from msg: {BA_msg} - HEX = {ByteArrayToHexString(BA_msg)}')
-			Logger.exception(str(err)) 
-			return [],[] 
-
-
-
-
-
-	def check_msg(self, BA_msg):
-		'''
-		Check if message is not corrupt, returns FALSE if message is corrupt.
-		'''
-		try:
-			# # Last byte MUST be a bus_free byte
-			# if not BA_msg[-1:]==self.bus_free:
-				# return False
-			# # remove the bus_free byte
-			# BA_msg=BA_msg[:-1]
-	
-			# All messages have a sender part, with a checksum
-			# aantal_s_databytes = int.from_bytes(BA_msg[4], byteorder="little")
-			# addressing or slicing a bytearray object on 1 index, results in an INTEGER, not a byte!!
-			aantal_s_databytes = BA_msg[4]
-			s_crc_index = 4 + aantal_s_databytes + 1
-			s_crc = self.calc_crc(BA_msg[0:s_crc_index])
-			if s_crc != BA_msg[s_crc_index:s_crc_index+1]:
-				Logger.error ("Checksum error in de send part of the message: " + ByteArrayToHexString(BA_msg))
-				Logger.error ("Aantal_s_databytes: %s  - s_crc_index: %s - crc should be: %s - and is: %s " 
-							  % (aantal_s_databytes, s_crc_index, s_crc, BA_msg[s_crc_index:s_crc_index+1]))
-				return False
-				
-			# If the message is longer than the sender checksum then an answer part was attached 
-			if len(BA_msg) > s_crc_index + 1:
-				# it is possible that an ACK is inserted by the receiver
-				if BA_msg[s_crc_index+1:s_crc_index+2]==self.ack_msg:
-					# aantal_a_databytes = int.from_bytes(BA_msg[s_crc_index+2])
-					aantal_a_databytes = BA_msg[s_crc_index+2]
-					a_crc_index = (s_crc_index+2) + aantal_a_databytes + 1
-					a_crc = self.calc_crc(BA_msg[(s_crc_index+2):a_crc_index])
-				else:
-					# aantal_a_databytes = int.from_bytes(BA_msg[s_crc_index+1])
-					aantal_a_databytes = BA_msg[s_crc_index+1]
-					a_crc_index = (s_crc_index+1) + aantal_a_databytes + 1
-					a_crc = self.calc_crc(BA_msg[(s_crc_index+1):a_crc_index])
-				if a_crc != BA_msg[a_crc_index:a_crc_index+1]:
-					# Checksum error in the answer part of the message
-					Logger.error ("Checksum error in de answer part of the message: " + ByteArrayToHexString(BA_msg))
-					Logger.error ("Aantal_a_databytes: %s - a_crc_index: %s - crc should be: %s - and is: %s "
-								  % (aantal_a_databytes, a_crc_index, a_crc, BA_msg[a_crc_index:a_crc_index+1]))
-					return False
-					
-			return True
-		except Exception as err:
-			# Waarschijnlijk een index out of range, dat krijg je bij een afgebroken message....
-			# geen foutlogging nodig hiervoor
-			print ("Error checking message: " + str(BA_msg) + ", HEX = " + ByteArrayToHexString(BA_msg))
-			print (str(err))
-			return False
-
-
-	def decode_msg(self, BA_msg, dp_ID, sk_indexes):
-		# de binnenkomende message is hier nog steed een bytearray....
-		try:
-			dp=DATAPOINTS_ID[dp_ID]
-			
-			if dp.st_index == None or dp.length == None or Is_NOE(dp.startkey_hex):
-				raise Exception ("Datapoint " + str(dp.ID) + dp.name + " has NO startkey, st_index and/or length defined, cant retrieve data....")
-			# isolate the data from the message
-			if dp.startkey_hex.upper()=="SND":
-				# The startkey refers to the SEND part of the message
-				# every message format starts with SS RR C1 C2 ND DD DD DD ..... CS
-				# so databytes in the send part always start on index 5
-				startpunt=5
-			elif dp.startkey_hex.upper()=="RES":
-				# The startkey refers to the RESPONSE part of the message
-				nd = BA_msg[4]
-				# sometimes there is an acknowlegde receipt after de CrC of the send side
-				ack = 4 + nd + 1 + 1
-				if BA_msg[ack:ack+1]==self.ack_msg:
-					# print ("ack found on the send side: " + ByteArrayToHexString(BA_msg))
-					# yes there is an ACK, after that is the ND of the response (so on ack+1), and after that the first response databyte (ack+1+1)
-					startpunt=ack+1+1
-				else:
-					# NO, there is NO ack, so the ND of the response in on this position, and after that the first response databyte (ack+1)
-					startpunt=ack+1
-			else:
-				raise Exception("Illegal phrase in startkey: " + dp.startkey_hex + ", must be SND or RES tom indicate the SEND or RESPONSE part of the message.")
-			
-			
-			# print (dp.name)
-			# print (ByteArrayToHexString(BA_msg))
-			
-			BA_databytes = BA_msg[(startpunt+dp.st_index):(startpunt+dp.st_index+dp.length)]
-
-			# print (ByteArrayToHexString(BA_databytes))
-			# wait = input("any key")
-			
-			
-			decoder = dp.datadecoder.strip() if IsNot_NOE(dp.datadecoder) else "ASCII"
-
-			if dp.log_messages: Logger.info("%s: %s--data send to the %s datadecoder: %s" % (self.name, dp.name, decoder, ByteArrayToHexString(BA_databytes)))
-			result = From_ByteArray_converter(decoder, BA_databytes)
-			# print(dp.name + "data received from datadecoder: " + str(result))
-			# force result into the correct datatype
-			if result != None: 
-				dp.write_INTFC_value(nwvalue=dp.datatype(str(result))) 
-				if dp.log_messages: Logger.info ("%s: %s--new value from %s datadecoder: %s" % (self.name, dp.name, decoder, str(dp.value)))
-			else:
-				raise Exception("From_ByteArray_converter " + decoder + " returned NULL as value from input: " + str(BA_databytes))
-
-		except Exception as err:
-			Logger.error(self.name + "--Error decoding message: " + str(BA_msg) + ", HEX = " + ByteArrayToHexString(BA_msg))
-			Logger.exception(str(err))  
-
-			
-	def make_poll_telgr(self,pollmsg_def):
-		# SA RA C1 C2 ND DD DD DD CD
-		# -- SA Sender address (FF for network management), RA Receive address, 
-		# -- C1 C2 Commandbytes, ND Number of databytes, DD databytes, CD Crc of all SA--DD
-		sendbytes = HexStringToByteArray("FF " + pollmsg_def.searchkey)
-		sendbytes += self.calc_crc(sendbytes)
-		# Fix the A9 and AA issues
-		sendbytes = sendbytes.replace(b"\xA9",b"\xA9\x00")
-		sendbytes = sendbytes.replace(b"\xAA",b"\xA9\x01")
-		# add the message to the message queue for the send routine, but only if it is not None (empty)
-		self.add_msg(sendbytes, acknowledge_receipt=False, msgtype=MsgType.PollMessage)
-		
-	def make_command_telgr(self, dp, nwvalue):
-		import json
-		try:
-			# make sure the nwvalue has the correct datatype
-			nwvalue = dp.datatype(nwvalue)
-			# het enige wat we weten is dat er geen integraal of datapoints in de calcrule zitten, dus alleen ["*","/","+","-"]
-			# alleen SIMPELE calcrules in de geest van x=#/a + b
-			
-			INTFC_rule = None
-			if IsNot_NOE(dp.calc_rule):
-				INTFC_rule = json.loads(dp.calc_rule.strip().replace("'",'"')).get('INTFC', None)
-				# print(INTFC_rule)
-				if INTFC_rule.strip().split("&")[0].startswith("#") and type(nwvalue) in [float, int]:
-					# It is possible that the nwvalue needs to be scaled/offset back
-					operations = [x.strip() for x in INTFC_rule.strip().lower().lstrip("#").split("&")]
-					# print ("original operations where: ", operations)
-					# old_oper = ["*","/","+","-"]
-					# new_oper = ["/","*","-","+"]
-					# van achter naar voor terugrekenen
-					for teller in range (len(operations)-1,-1,-1):
-						# print (teller, operations[teller][0])
-						try:
-							old_operand = operations[teller][0]
-							# index=old_oper.index(old_operand)
-							# # print (index)
-							# new_operand = new_oper[index]
-							# # print (new_operand)
-							if old_operand == "*": nwvalue = nwvalue / float(operations[teller].lstrip(old_operand))
-							if old_operand == "/": nwvalue = nwvalue * float(operations[teller].lstrip(old_operand))
-							if old_operand == "-": nwvalue = nwvalue + float(operations[teller].lstrip(old_operand))
-							if old_operand == "+": nwvalue = nwvalue - float(operations[teller].lstrip(old_operand))
-							
-						except Exception as err:
-							print(str(err))
-							break
-					
-			# print ("Re-scaled value = ", nwvalue)
-			
-			# Waitkey()
-			# now convert the new value to the correct bytearray
-			BA_nwvalue = To_ByteArray_converter(dp.datadecoder, nwvalue)
-			# print(ByteArrayToHexString(BA_nwvalue))
-			# Waitkey()
-			# convert the datapoint searchkey to a bytearray and add the sender (FF)
-			BA_searchkey = HexStringToByteArray("FF " + dp.searchkey)
-			# replace in the commanddata the 29 or 0D identifier with 0E
-			BA_searchkey[5:6] = b"\x0E"
-			# now add the new value bytes
-			sendbytes = BA_searchkey + BA_nwvalue
-			# recalculate the number of databytes now in the message
-			sendbytes[4:5] = (len(sendbytes) - 5).to_bytes(1, byteorder="big")
-			# and recalculate the Crc checksum
-			sendbytes += self.calc_crc(sendbytes)
-			# Fix the A9 and AA issues
-			sendbytes = sendbytes.replace(b"\xA9",b"\xA9\x00")
-			sendbytes = sendbytes.replace(b"\xAA",b"\xA9\x01")
-			# print (ByteArrayToHexString(sendbytes))
-			# add the message to the message queue for the send routine
-			self.add_msg(sendbytes, acknowledge_receipt=True, msgtype=MsgType.CommandMessage)
-			# and immediately poll to see the result reflected..
-			time.sleep(1.0)
-			self.add_msg(self.make_poll_telgr(dp), acknowledge_receipt=False, msgtype=MsgType.PollMessage)
-		except Exception as err:
-			Logger.exception(str(err))
-			
-	def calc_crc(self,check_byte_array):
-		# for calculating the Crc we need to put back the AA and A9 substitutes, for that purpose make a copy
-		ByteArray = check_byte_array.copy()
-		ByteArray = ByteArray.replace(b"\xA9",b"\xA9\x00")
-		ByteArray = ByteArray.replace(b"\xAA",b"\xA9\x01")
-		# print(f'Checked bytearray: {ByteArrayToHexString(ByteArray)}')
-		
-		uc_crc = 0
-		for databyte in ByteArray:
-			uc_crc=self.calc_crc_byte(databyte, uc_crc)
-		return bytearray([uc_crc])
-		
-	def calc_crc_byte(self,databyte, initial_uc_crc):
-		uc_polynom=0
-		uc_crc=initial_uc_crc
-		uc_byte = databyte
-		
-		for i in range(8):
-			if (uc_crc & 0x0080):uc_polynom=0x009B
-			else: uc_polynom=0x0000
-			# the ~ operator is the bitwise NOT operator....i.e. replace every 0 with a 1 and vice versa
-			uc_crc = (uc_crc & ~0x0080) << 1
-			if (uc_byte & 0x0080): uc_crc = uc_crc | 0x0001
-			uc_crc = uc_crc ^ uc_polynom
-			uc_byte = uc_byte << 1
-			
-		return uc_crc
-
 
 class ESMR50Interface(BaseInterface):
 	def __init__(self, *args, **kwargs):
@@ -2185,5 +1481,54 @@ class ESMR50Interface(BaseInterface):
 		except Exception as err:
 			Logger.exception(str(err))
 			
+class ESMR50_via_TCP(ESMR50Interface):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 
-	
+	def recv(self):
+		'''
+		Specifiek een kleine receiver serieel over TCP
+		'''
+		s = self.TCPclientSock
+		msgbytes = b''
+		self.stop_receiving = False
+		try:
+			while not self.stop_receiving:
+				self.recstate=Recstate.Waiting_For_MsgToReceive
+				packet = s.recv(1024)
+				if not packet: break
+				lines = packet.split(b'\n')
+				
+				if len(lines) == 1:
+					msgbytes += packet			# no \n encountered yet... add to buffer
+					continue
+
+				while len(lines) > 1:
+					msgbytes += lines[0]
+					msgbytes = msgbytes.strip(b'\r')
+					
+					if len(msgbytes) == 0:
+						pass
+					else:
+						# print(msgbytes.decode('utf-8'))
+						self.recstate = Recstate.Receiving_Msg
+						# some messages need pre-processing, implement in specific interface classes
+						msgbytes = self.pre_process_message(msgbytes)
+						# see if this message can be related to a datapoint
+						dp_IDs, sk_indexes = self.get_datapoints_from_msg(msgbytes)
+						if dp_IDs != []:
+							# we found at least one datapoint connected to this message
+							self.update_MON_widget(msgbytes, style=self.dp_style)
+							for dp_ID in dp_IDs:
+								self.decode_msg(msgbytes, dp_ID, sk_indexes)
+						else:
+							# No datapoint found, this message is unknown to us
+							self.update_MON_widget(msgbytes, style=self.unknown_style)
+						
+					msgbytes = b''
+					lines.pop(0)
+				# store whatever remains in the buffer for the next time
+				msgbytes = lines[0]
+		except Exception as err:
+			Logger.exception(str(err))
+			

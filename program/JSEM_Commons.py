@@ -162,13 +162,13 @@ def dump(obj):
 	for attr in dir(obj):
 		print("obj.%s = %r" % (attr, getattr(obj, attr)))
 	
-def get_newest_file(path):
-	# print("path plus pattern = %s" % path)
-	files = glob.glob(path)
-	if files == []:
-		return None
-	else:
-		return max(files, key=os.path.getctime)
+# def get_newest_file(path):
+# 	# print("path plus pattern = %s" % path)
+# 	files = glob.glob(path)
+# 	if files == []:
+# 		return None
+# 	else:
+# 		return max(files, key=os.path.getctime)
 		
 def get_files(path, option='all'):
 	import glob
@@ -186,66 +186,66 @@ def get_files(path, option='all'):
 		return files
 
 
-def normalize_data(df:pd.DataFrame, normalize:str ='mean_std', settings:dict ={}):
-	'''
-	This routine normalizes the data in 1 of 2 possible ways:
-	mean_std: substract the mean from the data and then divide by the std deviation
-	min_max: Scale everything back to a range between 0.0 and 1.0
-	
-	:param df: The pandas dataframe to normalize
-	:param normalize: 'mean_std' or 'min_max'
-	:param settings: a dictionary with per column a dictionary with mean/std or min/max presets
-	:return: the normalized data (in a dataframe) and a dataframe with the mean/std or min/max values per column
-	'''
-	'''
-	'''
-	result_settings = settings.copy()
-	
-	from pandas.api.types import is_numeric_dtype
-	# Normalizes all numerical data in a dataframe, shifts each column by its mean and scales it by its stddev
-	def shift_and_scale(col):
-		if is_numeric_dtype(col):
-			if settings:
-				mean = settings[col.name]['mean']
-				stddev = settings[col.name]['stddev']
-			else:
-				mean = col.mean()
-				stddev = col.std()
-				result_settings[col.name]={}
-				result_settings[col.name]['mean'] = mean
-				result_settings[col.name]['stddev'] = stddev
-			col = col - mean
-			if stddev != 0.0: 
-				col = col / stddev
-		return col
-		
-	def min_max_scale(col):
-		if is_numeric_dtype(col):
-			if settings:
-				min_value = settings[col.name]['min']
-				max_value = settings[col.name]['max']
-			else:
-				min_value = col.min()
-				max_value = col.max()
-				result_settings[col.name]={}
-				result_settings[col.name]['min'] = min_value
-				result_settings[col.name]['max'] = max_value
-				
-			if min_value != max_value:
-				col = (col - min_value)/(max_value - min_value)
-			else:
-				# all values are equal... so 0 for 0 and 1 for everything else
-				col = pd.np.where(col != 0, 1.0, 0.0)
-		return col
-		
-	if normalize == 'mean_std':
-		# Shift the data by the mean per columns and scale by the stddev per columns
-		return df.apply(lambda x: shift_and_scale(x), axis=0), result_settings
-	elif normalize == 'min_max':
-		# now scale everything in a range between 0 and 1
-		return df.apply(lambda x: min_max_scale(x), axis=0), result_settings
-	else:
-		raise Exception(f'non existing normalization method..{normalize}')
+# def normalize_data(df:pd.DataFrame, normalize:str ='mean_std', settings:dict ={}):
+# 	'''
+# 	This routine normalizes the data in 1 of 2 possible ways:
+# 	mean_std: substract the mean from the data and then divide by the std deviation
+# 	min_max: Scale everything back to a range between 0.0 and 1.0
+#
+# 	:param df: The pandas dataframe to normalize
+# 	:param normalize: 'mean_std' or 'min_max'
+# 	:param settings: a dictionary with per column a dictionary with mean/std or min/max presets
+# 	:return: the normalized data (in a dataframe) and a dataframe with the mean/std or min/max values per column
+# 	'''
+# 	'''
+# 	'''
+# 	result_settings = settings.copy()
+#
+# 	from pandas.api.types import is_numeric_dtype
+# 	# Normalizes all numerical data in a dataframe, shifts each column by its mean and scales it by its stddev
+# 	def shift_and_scale(col):
+# 		if is_numeric_dtype(col):
+# 			if settings:
+# 				mean = settings[col.name]['mean']
+# 				stddev = settings[col.name]['stddev']
+# 			else:
+# 				mean = col.mean()
+# 				stddev = col.std()
+# 				result_settings[col.name]={}
+# 				result_settings[col.name]['mean'] = mean
+# 				result_settings[col.name]['stddev'] = stddev
+# 			col = col - mean
+# 			if stddev != 0.0:
+# 				col = col / stddev
+# 		return col
+#
+# 	def min_max_scale(col):
+# 		if is_numeric_dtype(col):
+# 			if settings:
+# 				min_value = settings[col.name]['min']
+# 				max_value = settings[col.name]['max']
+# 			else:
+# 				min_value = col.min()
+# 				max_value = col.max()
+# 				result_settings[col.name]={}
+# 				result_settings[col.name]['min'] = min_value
+# 				result_settings[col.name]['max'] = max_value
+#
+# 			if min_value != max_value:
+# 				col = (col - min_value)/(max_value - min_value)
+# 			else:
+# 				# all values are equal... so 0 for 0 and 1 for everything else
+# 				col = pd.np.where(col != 0, 1.0, 0.0)
+# 		return col
+#
+# 	if normalize == 'mean_std':
+# 		# Shift the data by the mean per columns and scale by the stddev per columns
+# 		return df.apply(lambda x: shift_and_scale(x), axis=0), result_settings
+# 	elif normalize == 'min_max':
+# 		# now scale everything in a range between 0 and 1
+# 		return df.apply(lambda x: min_max_scale(x), axis=0), result_settings
+# 	else:
+# 		raise Exception(f'non existing normalization method..{normalize}')
 
 
 
@@ -256,7 +256,10 @@ def is_child_of(child, parent):
 	:param parent:
 	:return: True or False
 	'''
-	level_up = child.get_parent()
+	try:
+		level_up = child.get_parent()
+	except:
+		return False
 	if level_up is None:
 		return False
 	elif level_up is parent:
@@ -808,14 +811,18 @@ def Load_Images(image_name):
 epex_data = 214	# Datapoint ID of the Epex data
 epex_pred = 334
 
-def get_all_epexinfo(start_dt=datetime.now(), plan_hours=None):
+
+def get_all_epexinfo(start_dt:datetime=datetime.now(), plan_hours=None):
+	"""
+	This routine return a dataframe with EPEX info consisting of downloaded EPEX info and EPEX predictions
+	done by a separate prediction model. Only a continuous set of hours will be returned... so if hours start
+	missing (in the downloaded data and or the prediction) the series will be stopped at that point.
+	When the plan_hours parameter is used, the series will be stopped at that amount of continuous hours.
+	
+	:param start_dt:		The first hour which must be included
+	:param plan_hours:		The maximum number of hours to be returned, none= as many as there is data available
+	"""
 	from DB_Routines import get_df_from_database
-	'''
-	Deze routine returned een dataframe met epex_info die bestaat uit epex_data (voorzover beschikbaar)
-	aangevuld met epex_pred (indien en voorzover beschikbaar). Alleen aaneensluitende uren worden meegenomen
-	De serie wordt dus afgebroken als er uren beginnen te ontbreken
-	indien er een plan_hours is opgegeven wordt tot maximaal dat aantal uren vanaf de start_dt meegenomen
-	'''
 	# dit uur kunnen we beginnen
 	selected_startdate = start_dt.replace(minute=0, second=0, microsecond=0)
 	start_ts = int(selected_startdate.timestamp())

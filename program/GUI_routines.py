@@ -10,7 +10,7 @@ from Config import *
 import Common_Data
 from Common_Data import DATAPOINTS_NAME, DATAPOINTS_ID, CATEGORY_NAME, INTERFACE_ID, INTERFACE_NAME
 from DB_Routines import get_displaysorted_datapoint_names
-from Common_Routines import dump, IsNot_NOE, Is_NOE, Load_Images, expandcollapse
+from JSEM_Commons import dump, IsNot_NOE, Is_NOE, Load_Images, expandcollapse
 from Common_Enums import *
 # from JSEM_GUI_classes import JSEM_ChartCont, JSEM_Label, JSEM_Stacked_Bar, JSEM_BalancedGauge, JSEM_Map_Chart, JSEM_Bar_Chart
 # from JSEM_GUI_classes import JSEM_Line_Chart, JSEM_Rect, JSEM_Arrow, JSEM_Buffer, JSEM_WeatherIcon
@@ -19,8 +19,8 @@ from dateutil.relativedelta import relativedelta
 
 from JSEM_GUI_classes import JSEM_Label, JSEM_Line_Chart, JSEM_Map_Chart, JSEM_Bar_Chart
 from LogRoutines import Logger
-from remi_addons import waitkey
-
+from remi_addons import ALB_widget
+from DataPoint import Datapoint
 
 def Overzicht(DataCont, ChartCont, my_app):
 	from GUI_predef_widgets import Heat_widget, E_widget, Hp_widget, E_simple_widget, BarChart_widget
@@ -48,7 +48,30 @@ def Electra(DataCont, ChartCont, my_app):
 	ewidget.append(BarChart_widget(datapoints=[dp[epex_data]], title='Epex (APX) prijs', 
 										top='32%', left='83%', height='12%', width='15%', background_color='white'))
 	DataCont.append(ewidget)
-
+	
+	alb_cont = gui.Container(style='position:absolute;left:650px;top:10px;width:350;height:250px;background:transparent;border-style:none')
+	alb_L1 = ALB_widget(name='L1 (Amp)', width=100, height=200, alb_value=dp[L1_max_current].value, alb_state=dp[use_load_balancing].value,
+						style='position:absolute;left:0px;border-radius:10px;background-color:lavender')
+	alb_L1._data_buffer[-100:] = dp[L1_amps].last100_values
+	dp[L1_amps].subscribed_widgets.append(alb_L1)
+	alb_L1.onALBvalue_change.connect(lambda *args, **kwargs: dp[L1_max_current].write_value(alb_L1.alb_value))
+	
+	alb_L2 = ALB_widget(name='L2 (Amp)', width=100, height=200, alb_value=dp[L2_max_current].value, alb_state=dp[use_load_balancing].value,
+						style='position:absolute;left:125px;border-radius:10px;background-color:lavender')
+	alb_L2._data_buffer[-100:] = dp[L2_amps].last100_values
+	dp[L2_amps].subscribed_widgets.append(alb_L2)
+	alb_L2.onALBvalue_change.connect(lambda *args, **kwargs: dp[L2_max_current].write_value(alb_L2.alb_value))
+	
+	alb_L3 = ALB_widget(name='L3 (Amp)', width=100, height=200, alb_value=dp[L3_max_current].value, alb_state=dp[use_load_balancing].value,
+						style='position:absolute;left:250px;border-radius:10px;background-color:lavender')
+	alb_L3._data_buffer[-100:] = dp[L3_amps].last100_values
+	dp[L3_amps].subscribed_widgets.append(alb_L3)
+	alb_L3.onALBvalue_change.connect(lambda *args, **kwargs: dp[L3_max_current].write_value(alb_L3.alb_value))
+	
+	alb_cont.append([alb_L1, alb_L2, alb_L3])
+	alb_status = JSEM_Label(alb_cont, dp[ALB_status], left=0, top=210, style='width:350px;height:40px,background:orange',
+							show_subcat=False, show_unit=False)
+	DataCont.append(alb_cont)
 
 def Warmte(DataCont, ChartCont, my_app):
 	from GUI_predef_widgets import Heat_widget, BarChart_widget, LineChart_widget
@@ -157,10 +180,10 @@ def Solar(DataCont, ChartCont, my_app):
 								txt_font_size='1.5em', txt_width='auto', show_value=False, show_unit=False, adopt_dp_signals=False, 
 								cond_format=dict(prop='txt-background-color', cond="!=", check_value=0, true="red", false="transparent"))
 								
-		JSEM_Label(DataCont,dp[solar_AC_Voltage],text="volts", left=refx+160,top=refy+260, config=lbl_config, style=lbl_style)
-		JSEM_Label(DataCont,dp[solar_AC_Power],text="Nu", left=refx+160,top=refy+280, config=lbl_config, style=lbl_style)
-		JSEM_Label(DataCont,dp[solar_AC_Energy],text="Vandaag", left=refx+160,top=refy+300, config=lbl_config, style=lbl_style)
-		JSEM_Label(DataCont,dp[solar_alarmstatus],text="STATUS", left=refx+160,top=refy+320, config=lbl_config, style=lbl_style,
+		JSEM_Label(DataCont,dp[solar_AC_Power],text="Nu", left=refx+160,top=refy+260, config=lbl_config, style=lbl_style)
+		JSEM_Label(DataCont,dp[solar_AC_Energy],text="Vandaag", left=refx+160,top=refy+280, config=lbl_config, style=lbl_style)
+		JSEM_Label(DataCont,dp[solar_AC_energy_thismonth],text="Maand", left=refx+160,top=refy+300, config=lbl_config, style=lbl_style)
+		JSEM_Label(DataCont,dp[solar_inverter_status],text="Status", left=refx+160,top=refy+320, config=lbl_config, style=lbl_style,
 													show_value=False, dp_signal_prop='txt-background-color')
 		
 		chart_x = refx+160

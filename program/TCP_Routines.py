@@ -1,4 +1,6 @@
 import __main__
+from textwrap import dedent
+
 if __name__ == "__main__":
 	__main__.logfilename = "TCP_Server.log"
 	__main__.backupcount = 2
@@ -6,7 +8,7 @@ import os
 import sys
 from Config import DBFILE, TCPPORT, TCPHOST, MAX_EXTERNAL_CONN, DB_RETRIES, DB_WAITBETWEENRETRIES
 import Common_Data
-from Common_Routines import get_ip_address
+from JSEM_Commons import get_ip_address
 from LogRoutines import Logger
 import threading
 import time
@@ -239,7 +241,7 @@ Enter a SELECT or INSERT query...or hit RETURN to transmit a test dataframe to u
 			# input ('Any key...')
 
 			if not query:
-				from Common_Routines import store_df_in_database
+				from JSEM_Commons import store_df_in_database
 				test_df = {
 								'table':["Values","Values","Values","Values","Values"],
 								'datapointID' :[334,334,334,334,334],
@@ -259,13 +261,80 @@ Enter a SELECT or INSERT query...or hit RETURN to transmit a test dataframe to u
 	except EOFError as e:
 		print('tcp_sql_client terminated by user...')
 
+def Test_Serial_Client(*args, **kwargs):
+	print(dedent(
+	'''
+	=================== TCP - SQL Client ============================================================
+	Serial client provides a direct connection to a serial port on the JSEM production machine.
+	
+	'''))
+	
+	# print ('Receiving query in tcp_sql_client:')
+	# print (query)
+	result = None
+	stats = None
+	while True:
+		try:
+			with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+				# the client runs the socket in blocking mode
+				s.connect(('192.168.178.220', 65432))
+
+				# s.sendall(sendbytes)
+				# print('Bytesstream is send...')
+
+				buf = ''
+				byte_buf = b''
+				while True:
+					packet = s.recv(1024)
+					if not packet: break
+					lines = packet.split(b'\n')
+					if len(lines) == 1:
+						byte_buf += packet
+						continue
+					elif len(lines) > 1:
+						while len(lines) > 1:
+							byte_buf += lines[0]
+							print (byte_buf.strip(b'\r').decode('utf-8'))
+							byte_buf = b''
+							lines.pop(0)
+							
+						byte_buf = lines[0]
+						
+					else:
+						print('hoe kan dit nu??')
+						
+						
+					# for i in range(len(packet)):
+					# 	elem = packet[i:i+1]
+					# 	if elem == b'\r':
+					# 		continue
+					# 	if elem == b'\n':
+					# 		print(buf)
+					# 		buf = ''
+					# 	else:
+					# 		buf += elem.decode('utf-8')
+					#
+					
+				# print('Answer received from TCP_Serial host....')
+				# print(data)
+				break
+				# print(stats)
+		except Exception as err:
+			print(str(err))
+
+	return result, stats
+
+
 
 def main(*args, **kwargs):
-	if input('Run SERVER (S) or CLIENT(C)(Default)? :').upper()=='S':
+	select = input('Run SERVER (S) or CLIENT(C) or SERIAL_CLIENT(SC)(DEFAULT)? :').upper()
+	
+	if select=='S':
 		TestServer()
-	else:
+	elif select == 'C':
 		TestClient()
-
+	elif select == 'SC':
+		Test_Serial_Client()
 
 if __name__ == '__main__':
 	import sys

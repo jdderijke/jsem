@@ -22,6 +22,10 @@
 #  
 #  
 import __main__
+from pathlib import Path
+
+from Common_Utils import get_newest_file, normalize_data
+
 if __name__ == "__main__":
 	 __main__.logfilename = "HP_Optimzer.log"
 	 __main__.backupcount = 24
@@ -36,11 +40,10 @@ from Config import LOOK_BACK_DAYS, CONFIDENCE_LEVEL, MINIMUM_VALID_SAMPLES, HEAT
 
 from Config import METEOSERVER_FORECASTS, METEOSERVER_KEY, METEOSERVER_URL, METEOSERVER_DEFAULT_LOCATION
 from Config import DBFILE
-from Config import TFLITE_MODELS, frcst_timeshift, frcst_tempcorrtresholds, frcst_tempcorrvalues, frcst_tempcorr_backlook
+from Config import TFLITE_MODELS, frcst_timeshift, frcst_tempcorr_backlook
 from Datapoint_IDs import *
 
-from Common_Data import CWD
-from Common_Routines import cursor_to_dict, get_input, get_newest_file
+# from JSEM_Commons import cursor_to_dict, get_input, get_newest_file
 from Common_Data import DATAPOINTS_NAME, DATAPOINTS_ID
 from Common_Enums import Aggregation, DatabaseGrouping, DataSelection
 
@@ -50,7 +53,7 @@ from operator import itemgetter
 import sqlite3
 # import urllib3
 # from bs4 import BeautifulSoup
-# import json
+import json
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 import numpy as np
@@ -66,7 +69,7 @@ import select
 import errno
 from DB_Routines import store_value_in_database, get_value_from_database
 from DB_Routines import store_df_in_database, get_df_from_database
-from Common_Routines import get_newest_file, normalize_data
+# from JSEM_Commons import get_newest_file, normalize_data
 
 
 print(tflite_runtime.__version__)
@@ -101,97 +104,79 @@ def predict_heatingpower(**kwargs):
 		# input('Any key')
 		return np.squeeze(output_data)
 		
-	# def tempcorr(row):
-		# '''
-		# for now a simple model to correct the frcst_temp ... the model is trained on the actual measured temp
-		# there is a significant diff between the 2, specially at lower temperatures
-		# '''
-		# for index, treshold in enumerate(frcst_tempcorrtresholds):
-			# # corrigeer met de corrvalue die overeenkomt met de laagste treshold
-			# if row['frcst_temp'] <= treshold: return row['frcst_temp'] + frcst_tempcorrvalues[index]
-			
-		# # Als we hier komen is de frcst_temp dus hoger dan de hoogste gedefineerde treshold, corrigeer dan met de laatste waarde in de corrvalues tabel
-		# return row['frcst_temp'] + frcst_tempcorrvalues[-1]
-
-		# # if row['frcst_temp'] <= 2.0: return row['frcst_temp'] + 2.5
-		# # if row['frcst_temp'] <= 7.0: return row['frcst_temp'] + 1.5
-		# # if row['frcst_temp'] <= 11.0: return row['frcst_temp'] + 1.0
-		# # return row['frcst_temp'] + 0.0
-		
-	#---------------------------end internal routines------------
 	
 	try:
+		
+		# ===================== PREPARE AND INITIALIZE ============================================
+		model_file = get_newest_file(TFLITE_MODELS, "*_power_predictor.tflite")
+
+		
+		# ===================== CORRECTIONS ON THE INPUT DATA ============================================
 		# We beginnen 6 uur geleden, halen de frcst_temp en de werkelijke temp op
-		# de frcst_temp is alleen per uur en per hele graden beschikbaar, terwijl de Buitentemperatuur1 veel vaker en veel nauwkeuriger
+		# de frcst_temp is alleen per uur en per hele graden beschikbaar, terwijl de BuitenTemperatuur_act veel vaker en veel nauwkeuriger
 		# gemeten is. Door nu datagrouping per uur te doen en dan de mean aggregation te doen worden alle datapunten EERST gegroepeerd en 
 		# ge-aggregeerd alvorens ze worden gemerged met het eerste datapunt (frcst_temp in dit geval...)
 		startdate = datetime.now().replace(minute=0,second=0,microsecond=0) - relativedelta(hours=frcst_tempcorr_backlook)
-		corr_df = get_df_from_database(dpIDs=[frcst_temp, BuitenTemperatuur1], 
+		corr_df = get_df_from_database(dpIDs=[frcst_temp, BuitenTemperatuur_act],
 											selected_startdate=startdate,
 											selected_enddate=datetime.now().replace(minute=0,second=0,microsecond=0),
 											datagrouping=DatabaseGrouping.Hour, 
 											aggregation=Aggregation.Mean,
 											add_datetime_column=True)
-											
+		
+		corr_df['frcst_temp'] = corr_df['frcst_temp'].shift(frcst_timeshift)			# Move the forecast x hours earlier (-) or later (+)
+		corr_df = corr_df.dropna()
 		# bereken de gemiddelde afwijking tussen de forecast en de uur-gemiddelde metingen van de afgelopen 6 uur....
-		corr_df['diff'] = corr_df['BuitenTemperatuur1'] - corr_df['frcst_temp']
+		corr_df['diff'] = corr_df['BuitenTemperatuur_act'] - corr_df['frcst_temp']
 		correction = corr_df['diff'].sum() / len(corr_df)
 		correction = round(correction, 1)
-		
-		# print(corr_df)
-		# print(f'Correction = {correction}')
-		# input('any key')
-		
-		# Nu we de correctie weten laden we de frcst_temp nogmaals, maar nu voor de toekomst
+		Logger.info(f'Calculated temp correction = {correction}, (over last {frcst_tempcorr_backlook} '
+					f'hours after applying a timeshift of {frcst_timeshift} hours on the frcst)')
+
+
+		# ===================== CREATE THE INPUT DATA SET AND APPLY CORRECTIONS =======================================
+		# Het model is getraind met thermostaat setting en buitentemp_act, we maken een inputset met deze kolommen....
 		startdate = datetime.now().replace(minute=0,second=0,microsecond=0)
 		data_df = get_df_from_database(dpIDs=[frcst_temp], selected_startdate=startdate, add_datetime_column=True)
-		# Het model is getraind met thermostaat setting, deze voegen we nu toe aan de data....
-		DayTempSP_52 = get_value_from_database(dpID=DayTempSetpoint_52)
-		data_df['DayTempSetpoint_52'] = DayTempSP_52
-		Logger.info(f'Making a power consumption prediction based on a thermostat setting of {DayTempSP_52}')
 		
-		# here we can make some corrections to the frcst_temp and also make a timeshift if needed
+		# roomtemp_setp = get_value_from_database(dpID=DayTempSetpoint_52)
+		roomtemp_setp = 19.0				# Tijdelijk, zolang de thermostaat nog niet is aangesloten
+		data_df['roomtemp_setp'] = roomtemp_setp
+		Logger.info(f'Now making a power consumption prediction based on a thermostat setting of {roomtemp_setp}')
+		
+		# here we can apply the shift and make the calculated corrections to the frcst_temp
 		data_df['frcst_temp'] = data_df['frcst_temp'].shift(frcst_timeshift)			# Move the forecast x hours earlier (-) or later (+)
 		data_df = data_df.dropna()
-		Logger.info(f'Data Gathered ...timeshift applied = {frcst_timeshift}')
-		
-		# Los van een timeshift kunnen we ook correcties op de frcst_temp maken om dichter bij de BuitenTemperatuur1 te komen, hiervoor zijn
-		# verschillende benaderingen:
-		
-		# Een correctie gebaseerd op verschillen in het verleden
-		data_df['BuitenTemperatuur1'] = data_df['frcst_temp'] + correction
-		Logger.info(f'Data Gathered ...temp correction = {correction}, (calculated over last {frcst_tempcorr_backlook} hours)')
+		# creer nu een buitentemp kolom gebaseerd op de eerder bepaalde correctie t.o.v. de frcst
+		data_df['BuitenTemperatuur_act'] = data_df['frcst_temp'] + correction
+		Logger.info(f'---timeshift ({frcst_timeshift}) and temp correction ({correction}) applied over future buitentemp_act')
 
-		# # Een correctie tabel die andere correcties geeft bij verschillende temperaturen...
-		# data_df['BuitenTemperatuur1'] = data_df.apply(tempcorr, axis=1)	# Correction for frcst temp to actual buitentemp as measured by the HP
-		# Logger.info(f'Data Gathered ...temp correction applied, tresholds:{frcst_tempcorrtresholds}, corrections:{frcst_tempcorrvalues}')
 
+		# ===================== PREPARE THE RESULT SET ============================================
 		# prepare a dataframe for the results based on the timestamps of the data_df
 		results_df = data_df[['timestamp','datetime']]
 		# for inference only keep columns that are needed
-		data_df = data_df[['BuitenTemperatuur1', 'DayTempSetpoint_52']]
+		data_df = data_df[['BuitenTemperatuur_act', 'roomtemp_setp']]
 		# convert the whole dataframe (all the columns left) to float) and normalize the set
 		data_df = data_df.astype(float)
 		
-		# print(data_df)
-		# print(data_df.dtypes)
-		# input('Any key')
 		
-		model_file = get_newest_file(TFLITE_MODELS + "/*_power_predictor.tflite")
+		# ===================== NORMALIZE THE INPUT DATA ============================================
 		normalization_settings_file = model_file.replace('.tflite','.json')
 		if os.path.isfile(normalization_settings_file):
-			import json
-			Logger.info(f'normalization settings file found: {normalization_settings_file}')
+			Logger.info(f'---normalization settings file found: {normalization_settings_file}')
 			# We have a settings file for normalization... so normalize the data, first opening and converting JSON file
-			with open(normalization_settings_file) as json_file:			
+			with open(normalization_settings_file) as json_file:
 				normalization_settings = json.load(json_file)
 
 			data_df,_ = normalize_data(data_df, normalize='mean_std', settings=normalization_settings)
-			Logger.info(f'data normalized using settings {normalization_settings}')
+			Logger.info(f'---data normalized using settings {normalization_settings}')
+
+
 			
-		# now load the tflite interpreter
+		# ===================== LOAD AND PREPARE THE INTERPRETER  ============================================
 		interpreter = tflite.Interpreter(model_path=model_file)
-		Logger.info('Loaded TFLite model file: %s into interpreter...' % model_file)
+		Logger.info('---loaded TFLite model file: %s into interpreter...' % model_file)
 		
 		interpreter.allocate_tensors()
 		# Get input and output tensors.
@@ -201,19 +186,19 @@ def predict_heatingpower(**kwargs):
 		output_details = interpreter.get_output_details()
 		# print(output_details)
 		# input('Any key')
-		Logger.info('Tensors allocated, input and output details defined...')
+		Logger.info('---tensors allocated, input and output details defined...')
 		
-		Logger.info('Running inference on the input data and predicting frcst_power...')
+		Logger.info('---running inference on the input data and predicting frcst_power...')
 		results_df['frcst_power'] = data_df.apply(lambda x: model_inference(x, interpreter, input_details[0]['index'], output_details[0]['index']), axis=1)
 		
-		Logger.info('Saving power predictions in JSEM DB')
+		Logger.info('---saving power predictions in JSEM DB')
 		
 		# save het resultaat in frcst_power
 		results_df['table'] = 'Values'
 		results_df['datapointID'] = frcst_power
 		results_df = results_df.rename(columns={'frcst_power':'value'})
 		store_df_in_database(results_df[['table', 'datapointID', 'timestamp', 'value']])
-		Logger.info('New frcst_power Predictions calculated and succesfully stored in the database...')
+		Logger.info('---new frcst_power Predictions calculated and succesfully stored in the database...')
 		
 		return 0
 	except Exception as err:
@@ -335,7 +320,7 @@ def make_hp_plan(store_plan=False):
 	It will store the resulting hp_plan in the DB per hour. 
 	'''
 	from DB_Routines import store_value_in_database, get_value_from_database, get_df_from_database
-	from Common_Routines import get_all_epexinfo
+	from JSEM_Commons import get_all_epexinfo
 	from Calculate_costs import load_settings
 		
 	now = datetime.now()
@@ -344,43 +329,41 @@ def make_hp_plan(store_plan=False):
 	
 	# First, get the CURRENT (begin of the hour) content of the buffer, and the CURRENT min and max levels
 	buf_init = get_value_from_database(dpID=Act_Energy_Buf, ts=timestamp)
-	buf_min  = get_value_from_database(dpID=Min_Energy_Buf, ts=timestamp)
-	buf_max  = get_value_from_database(dpID=Max_Energy_Buf, ts=timestamp)
+	buf_min  = get_value_from_database(dpID=Min_Energy_Buf)
+	buf_max  = get_value_from_database(dpID=Max_Energy_Buf)
+	
 	buf_loss = get_value_from_database(dpID=Loss_Buffervat, ts=timestamp)
-	Flow50_maxtemp = get_value_from_database(dpID=FlowTempMax_50, ts=timestamp)
-	buf_reftemp = get_value_from_database(dpID=Ref_Energy_Temp, ts=timestamp)
+	# Flow50_maxtemp = get_value_from_database(dpID=FlowTempMax_50, ts=timestamp)
+	# buf_reftemp = get_value_from_database(dpID=Ref_Energy_Temp, ts=timestamp)
 	
 	
-	# Get the values for the last 2 hours for Act_Power_01 and their timestamps in a dataframe
-	Logger.info('Calculating new minimum and maximum buffer levels...')
-	Act_Power_df = get_df_from_database(dpIDs=[Act_Power_01], dataselection=DataSelection._2hr, dataselection_date=begin, add_datetime_column=True)
-	
-	if len(Act_Power_df) > 0:
-		# Calculate the AVERAGE hourly power consumption (incl losses) over the last 2 hours or shorter if no longer period is available. 
-		# Set buf_min to be 1.5 times the calculated minimal hourly consumption 
-		buf_min = (Act_Power_df['Act_Power_01'].mean() + buf_loss) * 1.5
-		buf_min = round(buf_min, 2)
-	else:
-		# But.....If we cant get a decent average then we default to a safe value for the buf_min.
-		Logger.warning(f'Unable to determine average powerconsumption over last 2 hours... using default value for Min_Energy_Buf')
-		buf_min = 6.0	# kWh
-		
-	# Calculate new buf_max value
-	buf_max =  (Flow50_maxtemp - buf_reftemp) * 1.16 # kWh
-	buf_max = round(buf_max, 2)
-	# and update the DB value for Min_Energy_Buf
-	store_value_in_database(dpID_timestamp_values=[(Min_Energy_Buf, timestamp, buf_min), (Max_Energy_Buf, timestamp, buf_max)])
-	# syntax: store_value_in_database(dpID_timestamp_values)  -> dpID_timestamp_values is a list of tuples (datapointID, timestamp, value)
-
-	Logger.info(f'New Min_Energy_Buf = {buf_min} Kwh, New Max_Energy_Buf = {buf_max}, both are stored in database')
-	# input('Any key')
+	# # Get the values for the last 2 hours for Act_Power_01 and their timestamps in a dataframe
+	# Logger.info('Calculating new minimum and maximum buffer levels...')
+	# Act_Power_df = get_df_from_database(dpIDs=[Act_Power_01], dataselection=DataSelection._2hr, dataselection_date=begin, add_datetime_column=True)
+	#
+	# if len(Act_Power_df) > 0:
+	# 	# Calculate the AVERAGE hourly power consumption (incl losses) over the last 2 hours or shorter if no longer period is available.
+	# 	# Set buf_min to be 1.5 times the calculated minimal hourly consumption
+	# 	buf_min = (Act_Power_df['Act_Power_01'].mean() + buf_loss) * 1.5
+	# 	buf_min = round(buf_min, 2)
+	# else:
+	# 	# But.....If we cant get a decent average then we default to a safe value for the buf_min.
+	# 	Logger.warning(f'Unable to determine average powerconsumption over last 2 hours... using default value for Min_Energy_Buf')
+	# 	buf_min = 6.0	# kWh
+	#
+	# # and update the DB value for Min_Energy_Buf
+	# store_value_in_database(dpID_timestamp_values=[(Min_Energy_Buf, timestamp, buf_min)])
+	# # syntax: store_value_in_database(dpID_timestamp_values)  -> dpID_timestamp_values is a list of tuples (datapointID, timestamp, value)
+	#
+	# Logger.info(f'New Min_Energy_Buf = {buf_min} Kwh, New Max_Energy_Buf = {buf_max}, both are stored in database')
+	# # input('Any key')
 	
 
 
 
 
 	# build a dataframe met alle data nodig om een plan te berekenen
-	power_df = get_df_from_database(dpIDs=[frcst_power], add_datetime_column=True)
+	power_df = get_df_from_database(dpIDs=[frcst_power], selected_startdate=begin, add_datetime_column=True)
 	epex_df = get_all_epexinfo()
 	# merge de power data tegen de epex data, gebruik de epex data als leading
 	data_df = epex_df.merge(power_df[['timestamp','frcst_power']], how='left', on='timestamp')
@@ -412,13 +395,13 @@ def make_hp_plan(store_plan=False):
 	plan_df = plan_df.round({'frcst_power':2, 'buf_cap':2, 'cost':2})
 
 	# To make sure the whole dataframe is logged in the logfile... change the display settings of Pandas
-	pd.set_option('max_columns', None)
+	pd.set_option('display.max_columns', None)
 	pd.set_option('display.width',1000)
 	Logger.info(f'The resulting plan is: \n{plan_df}\n')
-	pd.reset_option('max_columns')
+	pd.reset_option('display.max_columns')
 	
 	if store_plan:
-		Logger.info("Store HP plan in database: %s" % (CWD+DBFILE))
+		Logger.info(f"Store HP plan in database: {DBFILE}")
 		
 		# save hp_plan, hp_plan_costs en frcst_buffer_energie
 		plan_df['table'] = 'Values'
@@ -427,10 +410,10 @@ def make_hp_plan(store_plan=False):
 		store_df_in_database(plan_df[['table', 'datapointID', 'timestamp', 'value']])
 		Logger.info('hp_plan stored in the database...')
 		
-		plan_df['datapointID'] = hp_plan_costs
-		plan_df['value'] = plan_df['cost']
-		store_df_in_database(plan_df[['table', 'datapointID', 'timestamp', 'value']])
-		Logger.info('hp_plan_costs stored in the database...')
+		# plan_df['datapointID'] = hp_plan_costs
+		# plan_df['value'] = plan_df['cost']
+		# store_df_in_database(plan_df[['table', 'datapointID', 'timestamp', 'value']])
+		# Logger.info('hp_plan_costs stored in the database...')
 		
 		plan_df['datapointID'] = frcst_buffer_energie
 		plan_df['value'] = plan_df['buf_cap']
@@ -449,7 +432,6 @@ def main(*args, **kwargs):
 		# er zijn argumenten met de commandline meegegeven, dus automatisch script
 		predict_heatingpower(msg='Ran as preparation for HP_Optimizer...')
 		make_hp_plan(store_plan=True)
-		# make_hp_plan(store_plan=False)
 
 	except KeyboardInterrupt:
 		Logger.error ("Cancelled from keyboard....")

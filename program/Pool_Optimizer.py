@@ -168,7 +168,7 @@ def make_timer_plan(running_standalone=False, **kwargs):
 
 def make_pool_plan(running_standalone=False, **kwargs):
 	from DB_Routines import store_df_in_database, get_df_from_database, get_value_from_database
-	from Common_Routines import get_all_epexinfo
+	from JSEM_Commons import get_all_epexinfo
 	import math
 	'''
 	Calculates a 10-minute plan for the full 24 hour of the plandate.
@@ -290,7 +290,7 @@ def make_pool_plan(running_standalone=False, **kwargs):
 		
 	
 def main(*args, **kwargs):
-	from Common_Routines import get_input
+	from JSEM_Commons import get_input
 	# pd.set_option('display.min_rows', 100)
 	# pd.set_option('display.max_rows', 100)
 	

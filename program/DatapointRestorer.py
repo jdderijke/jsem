@@ -35,7 +35,7 @@ from LogRoutines import Logger
 from Config import LOGFILELOCATION, Loglevel
 from Config import DBFILE
 from Common_Data import CWD
-from Common_Routines import IsNot_NOE
+from JSEM_Commons import IsNot_NOE
 
 # from Common_Enums import *
 import sqlite3

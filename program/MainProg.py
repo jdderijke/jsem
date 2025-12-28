@@ -14,15 +14,13 @@ import JSEM_Rules
 
 import GUI_routines
 from GUI_routines import show_all
-from remi_addons import waitkey
 
 from TCP_Routines import TCPServer
 from JSEM_Rules import JSEM_Rule
-from interfaces import EbusInterface, DeltaInterface, ESMR50Interface, MbusInterface, SdmModbusInterface, \
-	ShellyRelayInterface
+from interfaces import ESMR50Interface, MbusInterface, SdmModbusInterface, ShellyRelayInterface, ESMR50_via_TCP
 import io
 import time
-import datetime
+from datetime import datetime
 import threading
 import random
 import signal
@@ -33,7 +31,8 @@ from Config import TCPPORT, TCPHOST, MAX_EXTERNAL_CONN
 from Config import CWD, DBFILE, LOGFILELOCATION, Loglevel, ENVIRONMENT, DB_looptime, DB_alivetime, Reboot_time
 import Common_Data
 from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, DB_STORE, JSEM_RULES
-from Common_Routines import expandcollapse, Waitkey, Calculate_Timerset, get_ip_address
+from JSEM_Commons import expandcollapse, Calculate_Timerset
+from Common_Utils import get_extra_css, get_ip_address, Waitkey, get_seconds_untill
 import remi.gui as gui
 from remi.gui import *
 from remi import start, App
@@ -128,16 +127,11 @@ class JSEM(App):
 	
 	def main(self):
 		# insert an addition to the css stylesheet, specifically for the remi add-ons
-		fullpath = pathlib.Path(CWD, "css/remi_addons.css")
-		Logger.info(f"Looking for additional css file: .....{fullpath}")
-		if fullpath.is_file():
-			with open(fullpath, 'r') as f:
-				style_str = f.read()
-			style_str = f'<style type="text/css">{style_str}</style>'
-			
-			head = self.page.get_child('head')
-			head.add_child('slider_css', style_str)
-		
+		Logger.info("Looking for additional css files....")
+		style_str = get_extra_css("css")
+		head = self.page.get_child('head')
+		head.add_child(str(id(style_str)), style_str)
+
 		Common_Data.MAIN_INSTANCE = self
 		return E_mainscreen(self)
 	
@@ -223,14 +217,15 @@ if __name__ == "__main__":
 	Logger.info ("Loading category definitions")
 	load_all_categories()
 
-	Logger.info ("Initializing Warmtepomp - Ebus")
-	EbusInterface(name="Warmtepomp", auto_start=True)
+	Logger.info ("Initializing Warmtepomp - WS172 H3")
+	SdmModbusInterface(name="Warmtepomp", auto_start=True)
 
-	Logger.info ("Initializing Zonnepanelen - DeltaSolivia")
-	DeltaInterface(name="Zonnepanelen", auto_start=True)
+	Logger.info ("Starting Zonnepanelen - Solis 3p5K-4g")
+	SdmModbusInterface(name="Solar", auto_start=True)
 
 	Logger.info ("Initializing Slimmemeter - ESMR 5.0")
-	ESMR50Interface(name="Slimmemeter", auto_start=True)
+	# ESMR50Interface(name="Slimmemeter", auto_start=True)
+	ESMR50_via_TCP(name="Slimmemeter", auto_start=True, address='192.168.178.220', port=65432, conn_type="DEFAULT-TCP")
 
 	Logger.info ("Initializing Vermogensmeters - M_bus")
 	MbusInterface(name="Vermogensmeters", auto_start=True)
@@ -270,12 +265,45 @@ if __name__ == "__main__":
 		t.start()
 		Logger.info("TCP-SQL Server proces started on address: %s, port: %s" % (found_address, found_tcpport))
 
-								
+	# start the optimizer on the next hour and then every hour
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="Warmtepomp optimalisatie algoritme",
+								rule=JSEM_Rules.optimizer,
+								interval=3600,
+								startup_delay= 3600 - int(datetime.now().timestamp()) % 3600,
+								start=True)
+								)
+	
+	#start the execution of the strategy every minute
 	Common_Data.JSEM_RULES.append(
 								JSEM_Rule(name="Warmtepomp strategie 1",
 								rule=JSEM_Rules.warmtepomp_strat_1,
 								interval=60,
-								startup_delay=20,
+								startup_delay=30,
+								start=True)
+								)
+	
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="EPEX data downloader",
+								rule=JSEM_Rules.get_epex_data,
+								interval=24*3600,
+								startup_delay= get_seconds_untill(untill_time='15:00:00'),
+								start=True)
+								)
+
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="LEBA data downloader",
+								rule=JSEM_Rules.get_leba_data,
+								interval=24*3600,
+								startup_delay= get_seconds_untill(untill_time='22:00:00'),
+								start=True)
+								)
+
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="Weather forecast",
+								rule=JSEM_Rules.get_weather_frcst,
+								interval=24*3600,
+								startup_delay= get_seconds_untill(untill_time='23:45:00'),
 								start=True)
 								)
 
@@ -283,7 +311,7 @@ if __name__ == "__main__":
 								JSEM_Rule(name="laadpaal_rule_1",
 								rule=JSEM_Rules.laadpaal_rule_1,
 								interval=60,
-								startup_delay=30,
+								startup_delay=45,
 								start=True)
 								)
 
@@ -313,11 +341,11 @@ if __name__ == "__main__":
 								)
 
 
-	if ENVIRONMENT==Environment.Productie and Reboot_time != "":
-		timerset,repeat = Calculate_Timerset(interval=Reboot_time)
-		Logger.info ("Setting up automatic reboot, at %s, timerset = %s s" % (Reboot_time, timerset))
-		reboot_timer = threading.Timer(timerset, auto_reboot_callback)
-		reboot_timer.start()
+	# if ENVIRONMENT==Environment.Productie and Reboot_time != "":
+	# 	timerset,repeat = Calculate_Timerset(interval=Reboot_time)
+	# 	Logger.info ("Setting up automatic reboot, at %s, timerset = %s s" % (Reboot_time, timerset))
+	# 	reboot_timer = threading.Timer(timerset, auto_reboot_callback)
+	# 	reboot_timer.start()
 
 	
 	

@@ -3,8 +3,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from Common_Enums import *
-from Common_Routines import dump, Waitkey, Is_NOE, IsNot_NOE, expandcollapse, get_days_in_month
-from Common_Routines import set_css_sizes, set_mouse, set_widget_colors, first_number, Load_Images
+from JSEM_Commons import dump, Waitkey, Is_NOE, IsNot_NOE, expandcollapse, get_days_in_month
+from JSEM_Commons import set_css_sizes, set_mouse, set_widget_colors, first_number, Load_Images
 from Datapoint_IDs import *
 
 import Common_Data
@@ -191,6 +191,8 @@ class JSEM_GUI(object):
 
 
 	def connect_datapoint(self):
+		all_conditions = ["gte", "ste", "neq", "gt", "st", "eq", "!=", "==", "<=", ">=", ">", "<", "="]
+		
 		self.config['unit'] = self.datapoint.unit
 		# configure conditional formatting rules based on the sig_rule of the datapoint
 		if self.config.get('adopt_dp_signals', False) and self.config.get('dp_signal_prop',False) and self.datapoint.sig_rule: 
@@ -209,8 +211,21 @@ class JSEM_GUI(object):
 					true_value = Signal_bg_color
 				else:
 					continue
-				cond = rest_rule[:first_number(rest_rule)]
-				check_value = float(rest_rule[first_number(rest_rule):])
+				
+				cond = None
+				for test_cond in all_conditions:
+					if rest_rule.startswith(test_cond):
+						cond = test_cond
+						rest_rule = rest_rule[len(test_cond):]
+						break
+				if not cond: raise NotImplementedError("Illegal SIG rule")
+				
+				try:
+					check_value = float(rest_rule)
+				except ValueError:
+					check_value = rest_rule.replace('"', '').replace("'","")
+				
+				# print (self.datapoint.name, cond, check_value, prop)
 				self.cond_format.append(dict(cond=cond, check_value=check_value, prop=prop, 
 													true=true_value, false=false_value, qit=True))
 		# Subscribe this widget to the datapoint for dynamic updates
@@ -229,6 +244,7 @@ class JSEM_GUI(object):
 		check = False
 		prop_nwvalue = None
 		# check if the condition is satisfied on the self.value
+		# print(self.datapoint.name, self.value, cond_format)
 		if self.value is None: check=False
 		elif cond_format is None: check=False
 		elif cond_format['cond'] in ["gt",">"] and self.value > cond_format["check_value"]: check=True
@@ -238,6 +254,8 @@ class JSEM_GUI(object):
 		elif cond_format['cond'] in ["eq","=","=="] and self.value == cond_format["check_value"]: check=True
 		elif cond_format['cond'] in ["neq","!="] and self.value != cond_format["check_value"]: check=True
 		else: check=False
+		
+		
 		
 		if check:
 			prop_nwvalue = cond_format.get('true', None)
@@ -645,12 +663,12 @@ class JSEM_Line_Chart(JSEM_GUI, Svg):
 				charted_dp = dpinfo['datapoint']
 				if result_df is None: 
 					result_df = pd.DataFrame()
-					result_df['timestamp'] = charted_dp.last50_timestamps
-					result_df[charted_dp.name] = charted_dp.last50_values
+					result_df['timestamp'] = charted_dp.last100_timestamps
+					result_df[charted_dp.name] = charted_dp.last100_values
 				else:
 					add_df = pd.DataFrame()
-					add_df['timestamp'] = charted_dp.last50_timestamps
-					add_df[charted_dp.name] = charted_dp.last50_values
+					add_df['timestamp'] = charted_dp.last100_timestamps
+					add_df[charted_dp.name] = charted_dp.last100_values
 					result_df = pd.merge_asof(result_df, add_df, on="timestamp", direction="backward")
 			# because the timestamp is retrieved from the FIRST datapoint last50 values, it is possible that NaN entries show up for merged dp's'
 			# result_df = result_df.dropna()
@@ -1889,6 +1907,7 @@ class JSEM_ChartCont(JSEM_GUI, VBox):
 		self.datedpd.set_value(nw_date.strftime(self.dpd_date_format))
 
 
+
 class JSEM_Label(JSEM_GUI, HBox):
 	'''
 	JSEM label is a specific JSEM widget. It connects to a datapoint and can be updated by that datapoint via a subscription
@@ -1912,12 +1931,12 @@ class JSEM_Label(JSEM_GUI, HBox):
 									
 		default_style = {
 			'position':'absolute', 'margin':'0px', 'background-color':'transparent', 'border-style':'none', 'font-size':'14px',
-			'width':'100px', 'height':'auto', 'justify-content':'flex-start',
+			'width':'100%', 'height':'20px', 'justify-content':'flex-start',
 			
-			'name-white-space':'nowrap', 'name-overflow':'clip', 'name-font-size':'1.0em', 'name-color':"black", 'name-height':"auto", 'name-width':"40%", 'name-text-align':"left", 'name-background-color':'transparent', 'name-cursor':'default', 
+			'name-white-space':'nowrap', 'name-overflow':'clip', 'name-font-size':'1.0em', 'name-color':"black", 'name-height':"auto", 'name-width':"40%", 'name-text-align':"left", 'name-background-color':'transparent', 'name-cursor':'default',
 			'subcat-white-space':'nowrap', 'subcat-overflow':'clip', 'subcat-font-size':'0.75em', 'subcat-color':"black", 'subcat-height':"auto", 'subcat-width':'22%', 'subcat-text-align':"left", 'subcat-background-color':'transparent', 'subcat-cursor':'default',
 			'txt-white-space':'nowrap', 'txt-overflow':'clip', 'txt-font-size':'1.0em', 'txt-color':"black", 'txt-height':"auto", 'txt-width':'auto', 'txt-text-align':"left", 'txt-background-color':'transparent', 'txt-cursor':'default',
-			'value-white-space':'nowrap', 'value-overflow':'clip', 'value-font-size':'1.0em', 'value-color':"black", 'value-height':"auto", 'value-width':'18%', 'value-text-align':"left", 'value-background-color':'transparent', 'value-cursor':'default',
+			'value-white-space':'nowrap', 'value-overflow':'clip', 'value-font-size':'1.0em', 'value-color':"black", 'value-height':"100%", 'value-width':'18%', 'value-text-align':"left", 'value-background-color':'transparent', 'value-cursor':'default',
 			'unit-white-space':'nowrap', 'unit-overflow':'clip', 'unit-font-size':'0.75em', 'unit-color':"black", 'unit-height':"auto", 'unit-width':'8%', 'unit-text-align':"left", 'unit-background-color':'transparent', 'unit-cursor':'default',
 			'ckbox-transform':'scale(0.8)', 'ckbox-cursor':'pointer', 'ckbox-accent-color':'blue', 'ckbox-height':"2cqh", 'ckbox-width':"2cqh", 
 			'input-border-style':'solid', 'input-border-width':'1px', 'input-border-color':'grey', 'input-font-size':'1.0em', 'input-color':"black", 'input-height':"1.15em", 'input-width':'12%', 'input-text-align':"left",'input-background-color':'white', 'input-cursor':'text'
@@ -1934,9 +1953,7 @@ class JSEM_Label(JSEM_GUI, HBox):
 		self.style['container-type'] = 'inline-size'
 		# For whatever reason 'size' causes Firefox browser to stop working
 		# self.style['container-type'] = 'size'
-
 		self.chart_cont = None
-		
 		self.name_lbl = None
 		self.sc_lbl = None
 		self.txt_lbl = None

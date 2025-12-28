@@ -12,7 +12,7 @@ from Config import *
 import Common_Data
 # from LogRoutines import Logger
 from Common_Enums import *
-from Common_Routines import dump, IsNot_NOE, Is_NOE, Calculate_Timerset, Waitkey
+from JSEM_Commons import dump, IsNot_NOE, Is_NOE, Calculate_Timerset, Waitkey
 from LogRoutines import Logger
 
 
@@ -184,11 +184,11 @@ class Datapoint(object):
 			self._value = nwvalue
 			self._value_timestamp = nwtimestamp
 			
-			self.last50_values.append(self._value)
-			self.last50_timestamps.append(self._value_timestamp)
-			# 1 erbij, houd de 50 laatste entries
-			self.last50_values = self.last50_values[-50:]
-			self.last50_timestamps = self.last50_timestamps[-50:]
+			self.last100_values.append(self._value)
+			self.last100_timestamps.append(self._value_timestamp)
+			# 1 erbij, houd de 100 laatste entries
+			self.last100_values = self.last100_values[-100:]
+			self.last100_timestamps = self.last100_timestamps[-100:]
 			
 			if self.dbstore: self.db_store()
 			# Trigger dependants en widgets alleen als dat zinvol is
@@ -207,7 +207,7 @@ class Datapoint(object):
 			A better way would be to clean up widgets when they are no longer visible... however
 			REMI does not do that, widgets remain in exisitence even if they are not displayed anymore...
 		'''
-		from Common_Routines import is_child_of
+		from JSEM_Commons import is_child_of
 		try:
 			# if self.ID == 214: Logger.info(f'{self.name}-- datapoints update_widgets routine entered, len(self.subscribed_widgets)={len(self.subscribed_widgets)}')
 				
@@ -356,8 +356,8 @@ class Datapoint(object):
 		self.interface = None
 		# last50 is de lijst met de 50 laatste waarden met timestamps tijdens deze run (dus geen DB waarden, maar life waarden)
 		# de laatste waarde (current value) staat als laatste
-		self.last50_values = []
-		self.last50_timestamps = []
+		self.last100_values = []
+		self.last100_timestamps = []
 		
 		# een dictionary met widgets waarin dit datapoint voorkomt, bijvoorbeels als graph of chart
 		# deze widghets MOETEN een refresh() method hebben die wordt aangeroepen wanneer de value van het datapoint verandert.
@@ -553,7 +553,7 @@ class Datapoint(object):
 		from Calculate_costs import calculate_hourly_cost, calculate_daily_cost, calculate_monthly_cost
 		from Calcrule_routines import mode3_state_change, get_daily_use, get_daily_return, get_monthly_use, get_monthly_return
 		from Calcrule_routines import get_daily_gas, get_monthly_gas
-		from Common_Routines import thisday_timestamp, thishour_timestamp
+		from JSEM_Commons import thisday_timestamp, thishour_timestamp
 		from DB_Routines import get_value_from_database
 		from EV_Optimizer import make_ev_plan
 		from Pool_Optimizer import make_timer_plan, make_pool_plan
@@ -573,6 +573,7 @@ class Datapoint(object):
 			# now that we know for sure there is a value and a timestamp...calculate the timeintegral value based on hours (3600 sec)
 			delta_t = (time.time() - self._value_timestamp)/3600.0
 			result = self._value + (delta_t * inputv)
+			# Logger.info(f'Datapoint {self.ID}{self.name} calculated an integral with orig_value:{self._value}, delta_t:{delta_t} and inputv:{inputv} -> result:{result}')
 
 			# if self.ID == 335:
 				# Logger.info("integral: dp: %s, _value: %s, inputv: %s, delta_t: %s, integral adds %s, nw_value: %s" % 
@@ -848,6 +849,7 @@ class Datapoint(object):
 		startup/restart
 		'''
 		if self._value_timestamp is not None:
+			# if self.ID==87: input('any')
 			DB_Routines.store_field_in_database("Datapoints", self.ID, "last_value", self._value)
 			DB_Routines.store_field_in_database("Datapoints", self.ID, "last_timestamp", self._value_timestamp)
 		
@@ -858,7 +860,10 @@ class Datapoint(object):
 		value = DB_Routines.get_field_from_database("Datapoints", self.ID, "last_value")
 		timestamp = DB_Routines.get_field_from_database("Datapoints", self.ID, "last_timestamp")
 		if timestamp is not None:
-			self._value = self.datatype(value) if value!=None else None
+			try:
+				self._value = self.datatype(value) if value!=None else None
+			except:
+				Logger.error(f'Datapoint (from Datapoints table last_value field) {self.ID}:{self.name} failed to cast last value: {value} into datatype: {self.datatype}')
 			self._value_timestamp = int(timestamp)
 		elif use_values_table_if_needed:
 			# If this failed because nothing was stored there.... then try the long process of retrieving it from the Values table
@@ -867,7 +872,11 @@ class Datapoint(object):
 			if self.ID in last_value: 
 				value = last_value[self.ID]
 				timestamp = last_timestamp[self.ID]
-				self._value = self.datatype(value) if value!=None else None
+				try:
+					self._value = self.datatype(value) if value!=None else None
+				except:
+					Logger.error(f'Datapoint (from Values table) {self.ID}:{self.name} failed to cast last value: {value} into datatype: {self.datatype}')
+				
 				self._value_timestamp = int(timestamp)
 			else:
 				Logger.warning('%s--Could not retrieve last value' % self.name)
