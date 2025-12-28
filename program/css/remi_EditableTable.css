@@ -1,0 +1,99 @@
+
+/* BEGIN Editable Table */
+/* remi style.css settings related to editable tables settings are needed to overrule Remi css settings */
+
+.EditableTable th {
+	padding: 5px;
+	background: yellow;
+	color:black;
+	font-weight: bold;
+	position:relative;
+/*	overflow: hidden;
+	width: auto*/
+}
+
+/* includes alternating gray and white with on-hover red color */
+.EditableTable tr:nth-child(even) {
+	background: lightgrey;
+}
+
+.EditableTable tr:nth-child(odd) {
+	background: grey;
+}
+
+.EditableTable tr:hover {
+	background: red;
+	cursor: pointer;
+}
+
+.EditableTable td {
+    padding: 5px;
+	background: transparent;
+	position:relative;
+}
+
+/* Specific settings for the tableitems in the table
+.EditableTable td {
+	overflow: hidden;
+	width: auto
+}
+ */
+
+* {
+    box-sizing: border-box;
+}
+
+div .MultilineLabel {
+    background-color:transparent;
+}
+
+
+/*
+The following is for tooltips, these elements are added to th or td elements in a table
+default they are invisible, the hoover event changes the visibility
+hoovering is done on either a Tablerow or a Tableitem element
+*/
+.EditableTable th {
+	position:relative;
+}
+.EditableTable td {
+	position:relative;
+}
+
+.EditableTable .tiptext {
+      visibility: hidden;
+      display: block
+      width: 100%;
+      height:auto;
+      overflow:hidden;
+      background-color: white;
+      color: red;
+      text-align: center;
+      border: 2px solid silver;
+      border-radius: 6px;
+      padding: 5px;
+
+      font-size: 1.0em;
+	  font-family: "Lucida Console", "Courier New", monospace;
+	  /*font-weight: bold;*/
+
+      /* Position the tooltip */
+      position: absolute;
+      z-index: 1;
+      top: 50%;
+      left: 50%;
+      /*margin-left: -60px;*/
+}
+
+.EditableTable .hooverhere:hover .tiptext {
+    visibility:visible;
+    white-space: pre;
+}
+
+.EditableTable .TextInput {
+    width: 80%;
+	background: transparent;
+    border: 2px solid black
+}
+/* END Editable Table */
+
