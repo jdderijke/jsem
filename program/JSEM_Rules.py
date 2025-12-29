@@ -92,9 +92,10 @@ def optimizer(*args, **kwargs):
 	Runs a predictor on the heating power needed based on the model and weather forecast
 	Then runs an algorithm to find the best way to provide in this power based on EPEX prices and costs
 	"""
-	Logger.info("Running HP optimization algorithms....")
-	predict_heatingpower(msg='Ran as preparation for HP_Optimizer...')
-	make_hp_plan(store_plan=True)
+	Logger.info("predict_heatingpower started by JSEM_rules.optimizer....")
+	power_forecast = predict_heatingpower(store_in_db=True)
+	Logger.info("make_hp_plan started by JSEM_rules.optimizer....")
+	make_hp_plan(power_forecast=power_forecast, store_in_db=True)
 
 
 
@@ -148,7 +149,8 @@ def warmtepomp_strat_1(*args, **kwargs):
 			# During loading keep the circulationpump running to achieve maximal mixing in the buffer
 			DATAPOINTS_ID[circ_pomp_hp_buf].write_value(nwvalue=True)
 	else:
-		if buftemp_setp != hpnorm_setp:
+		if abs(buftemp_setp - hpnorm_setp) > 0.2:
+			# Om jutteren te voorkomen een kleine hysteresis gebruiken
 			Logger.info (f"BOOST OFF--buf_temp_setp aangepast naar {hpnorm_setp}, vloer_sl_temp_corr reset to 0.0")
 			DATAPOINTS_ID[sl_temp_corr].write_value(nwvalue=0.0)
 			DATAPOINTS_ID[buf_temp_setp].write_value(nwvalue=hpnorm_setp)

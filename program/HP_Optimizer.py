@@ -2,7 +2,7 @@
 import __main__
 from pathlib import Path
 
-from Common_Utils import get_newest_file, normalize_data
+from common_utils import get_newest_file, normalize_data
 
 if __name__ == "__main__":
 	 __main__.logfilename = "HP_Optimzer.log"
@@ -50,11 +50,11 @@ from DB_Routines import store_df_in_database, get_df_from_database
 # from JSEM_Commons import get_newest_file, normalize_data
 
 
-print(tflite_runtime.__version__)
+# print(tflite_runtime.__version__)
 
 
 
-def predict_heatingpower(**kwargs):
+def predict_heatingpower(store_in_db=False, **kwargs):
 	'''
 	This routine predicts the heating_power consumption of the house taken from the buffer (Act_Power_01)
 	For now this only works for positive power consumptions (heating), not for negative consumption (cooling)
@@ -66,8 +66,6 @@ def predict_heatingpower(**kwargs):
 	into the database...
 	The result of inference on this model therefore is a power_frcst for Act_Power_01 that can be used by the HP_optimizer
 	'''
-	msg = kwargs.get('msg',None)
-	if msg: Logger.info("message passed to routine: %s" % msg)
 	#--------------------------internal routines----------------
 	def model_inference(row, interpr, input_index, output_index):
 		# print(row)
@@ -84,7 +82,9 @@ def predict_heatingpower(**kwargs):
 		
 	
 	try:
-		
+		# To make sure the whole dataframe is logged in the logfile... change the display settings of Pandas
+		pd.set_option('display.max_columns', None)
+		pd.set_option('display.width', 1000)
 		# ===================== PREPARE AND INITIALIZE ============================================
 		model_file = get_newest_file(TFLITE_MODELS, "*_power_predictor.tflite")
 
@@ -108,7 +108,7 @@ def predict_heatingpower(**kwargs):
 		corr_df['diff'] = corr_df['BuitenTemperatuur_act'] - corr_df['frcst_temp']
 		correction = corr_df['diff'].sum() / len(corr_df)
 		correction = round(correction, 1)
-		Logger.info(f'Calculated temp correction = {correction}, (over last {frcst_tempcorr_backlook} '
+		Logger.info(f'---Calculated temp correction = {correction}, (over last {frcst_tempcorr_backlook} '
 					f'hours after applying a timeshift of {frcst_timeshift} hours on the frcst)')
 
 
@@ -117,10 +117,13 @@ def predict_heatingpower(**kwargs):
 		startdate = datetime.now().replace(minute=0,second=0,microsecond=0)
 		data_df = get_df_from_database(dpIDs=[frcst_temp], selected_startdate=startdate, add_datetime_column=True)
 		
+		# Logger.info(f'---the power predictions will be base on the following frcst:...\n{data_df}\n')
+
+		
 		# roomtemp_setp = get_value_from_database(dpID=DayTempSetpoint_52)
 		roomtemp_setp = 19.0				# Tijdelijk, zolang de thermostaat nog niet is aangesloten
 		data_df['roomtemp_setp'] = roomtemp_setp
-		Logger.info(f'Now making a power consumption prediction based on a thermostat setting of {roomtemp_setp}')
+		Logger.info(f'---Now making a power consumption prediction based on a thermostat setting of {roomtemp_setp}')
 		
 		# here we can apply the shift and make the calculated corrections to the frcst_temp
 		data_df['frcst_temp'] = data_df['frcst_temp'].shift(frcst_timeshift)			# Move the forecast x hours earlier (-) or later (+)
@@ -151,6 +154,8 @@ def predict_heatingpower(**kwargs):
 			Logger.info(f'---data normalized using settings {normalization_settings}')
 
 
+		# Logger.info(f'---the input dataset for the power predictions are:...\n{data_df}\n')
+
 			
 		# ===================== LOAD AND PREPARE THE INTERPRETER  ============================================
 		interpreter = tflite.Interpreter(model_path=model_file)
@@ -169,16 +174,21 @@ def predict_heatingpower(**kwargs):
 		Logger.info('---running inference on the input data and predicting frcst_power...')
 		results_df['frcst_power'] = data_df.apply(lambda x: model_inference(x, interpreter, input_details[0]['index'], output_details[0]['index']), axis=1)
 		
-		Logger.info('---saving power predictions in JSEM DB')
+		Logger.info(f'---the resulting power predictions are:...\n{results_df}\n')
 		
-		# save het resultaat in frcst_power
-		results_df['table'] = 'Values'
-		results_df['datapointID'] = frcst_power
-		results_df = results_df.rename(columns={'frcst_power':'value'})
-		store_df_in_database(results_df[['table', 'datapointID', 'timestamp', 'value']])
-		Logger.info('---new frcst_power Predictions calculated and succesfully stored in the database...')
+		if store_in_db:
+			Logger.info('---saving power predictions in JSEM DB')
+			# save het resultaat in frcst_power
+			store_df = pd.DataFrame()
+			store_df['timestamp'] = results_df['timestamp']
+			store_df['value'] = results_df['frcst_power']
+			store_df['table'] = 'Values'
+			store_df['datapointID'] = frcst_power
+			store_df_in_database(store_df[['table', 'datapointID', 'timestamp', 'value']])
+			Logger.info('---frcst_power stored in the database...')
 		
-		return 0
+		pd.reset_option('display.max_columns')
+		return results_df
 	except Exception as err:
 		Logger.exception (str(err))
 
@@ -291,7 +301,7 @@ def getnext_getal(getal, maxbits):
 		if format(next_getal, f'0{maxbits}b').count('1') == bitcount: 
 			return next_getal
 
-def make_hp_plan(store_plan=False):
+def make_hp_plan(power_forecast:pd.DataFrame=None, store_in_db:bool=False):
 	'''
 	This routine makes a plan for the heatpump based on the frcst_power data stored in the database
 	It will get the epex prices from the DB from now till as far as available (max 24 hours)
@@ -300,7 +310,11 @@ def make_hp_plan(store_plan=False):
 	from DB_Routines import store_value_in_database, get_value_from_database, get_df_from_database
 	from JSEM_Commons import get_all_epexinfo
 	from Calculate_costs import load_settings
-		
+	
+	# To make sure the whole dataframe is logged in the logfile... change the display settings of Pandas
+	pd.set_option('display.max_columns', None)
+	pd.set_option('display.width', 1000)
+
 	now = datetime.now()
 	begin = now.replace(minute=0, second=0)
 	timestamp = int(datetime.timestamp(begin))
@@ -339,12 +353,22 @@ def make_hp_plan(store_plan=False):
 
 
 
+	if power_forecast is not None:
+		power_df = power_forecast
+		Logger.info('---power_frcst passed as argument')
+		# Logger.info(f'\n{power_df}\n')
+	else:
+		# build a dataframe met alle data nodig om een plan te berekenen
+		power_df = get_df_from_database(dpIDs=[frcst_power], selected_startdate=begin, add_datetime_column=True)
+		Logger.info('---power_frcst retrieved from database')
+		# Logger.info(f'\n{power_df}\n')
 
-	# build a dataframe met alle data nodig om een plan te berekenen
-	power_df = get_df_from_database(dpIDs=[frcst_power], selected_startdate=begin, add_datetime_column=True)
-	epex_df = get_all_epexinfo()
+	epex_df = get_all_epexinfo(start_dt=begin)
+	# Logger.info(f'---epex info from {begin} :...\n{epex_df}\n')
 	# merge de power data tegen de epex data, gebruik de epex data als leading
 	data_df = epex_df.merge(power_df[['timestamp','frcst_power']], how='left', on='timestamp')
+	# Logger.info(f'---Merged power_frcst and EPEX prices:...\n{data_df}\n')
+	
 	# voeg wat extra kolommen toe
 	data_df['uur'] = [x for x in range(len(data_df))]
 	# We maken ook een list waarin we de buffer nivos kunnen opslaan, te beginnen met buf_init
@@ -364,52 +388,48 @@ def make_hp_plan(store_plan=False):
 										hp_power=HP_POWER, hp_usage = HP_USAGE,
 										kwh_opslag=kwh_opslag, dag_opslag=dag_opslag)
 
-	Logger.info(f'Started optimizer: act(init) buffer={buf_init}, buf_min={buf_min}, buf_max={buf_max}')
-	Logger.info(f'The length of the HP_plan will be {len(data_df)} hours')
+	Logger.info(f'---Started optimizer: act(init) buffer={buf_init}, buf_min={buf_min}, buf_max={buf_max}')
+	Logger.info(f'---The length of the HP_plan will be {len(data_df)} hours')
 	# Logger.info(f'Used data: \n{data_df}\n')
 
 	# optimize the dataframe using the row_based optimizer, data_df becomes a plan_df
 	plan_df = data_df.apply(lambda x: optimizer(x, opt_settings, data_df), axis=1)
 	plan_df = plan_df.round({'frcst_power':2, 'buf_cap':2, 'cost':2})
 
-	# To make sure the whole dataframe is logged in the logfile... change the display settings of Pandas
-	pd.set_option('display.max_columns', None)
-	pd.set_option('display.width',1000)
-	Logger.info(f'The resulting plan is: \n{plan_df}\n')
-	pd.reset_option('display.max_columns')
+	Logger.info(f'---The resulting plan is: \n{plan_df}\n')
 	
-	if store_plan:
-		Logger.info(f"Store HP plan in database: {DBFILE}")
+	if store_in_db:
+		Logger.info("---Store HP plan in JSEM DB")
+		# save hp_plan en frcst_buffer_energie
+		store_df = pd.DataFrame()
+		store_df['timestamp'] = plan_df['timestamp']
+		store_df['value'] = plan_df['draaien'].astype(int)
+		store_df['table'] = 'Values'
+		store_df['datapointID'] = hp_plan
+		store_df_in_database(store_df[['table', 'datapointID', 'timestamp', 'value']])
+		Logger.info('---hp_plan stored in the database...')
 		
-		# save hp_plan, hp_plan_costs en frcst_buffer_energie
-		plan_df['table'] = 'Values'
-		plan_df['datapointID'] = hp_plan
-		plan_df['value'] = plan_df['draaien'].astype(int)
-		store_df_in_database(plan_df[['table', 'datapointID', 'timestamp', 'value']])
-		Logger.info('hp_plan stored in the database...')
-		
-		# plan_df['datapointID'] = hp_plan_costs
-		# plan_df['value'] = plan_df['cost']
-		# store_df_in_database(plan_df[['table', 'datapointID', 'timestamp', 'value']])
-		# Logger.info('hp_plan_costs stored in the database...')
-		
-		plan_df['datapointID'] = frcst_buffer_energie
-		plan_df['value'] = plan_df['buf_cap']
+		store_df = pd.DataFrame()
+		store_df['timestamp'] = plan_df['timestamp']
+		store_df['value'] = plan_df['buf_cap']
+		store_df['table'] = 'Values'
+		store_df['datapointID'] = frcst_buffer_energie
 		# skip hour=0 to avoid overwriting the previous forecast for the current hour buffer capacity with the actual
 		# to avoid actuals and frcst buffer capacity for the current hour always to be 100% match
-		store_df_in_database(plan_df[1:][['table', 'datapointID', 'timestamp', 'value']])
-		Logger.info('frcst_buffer_energie stored in the database...')
+		store_df_in_database(store_df[1:][['table', 'datapointID', 'timestamp', 'value']])
+		Logger.info('---frcst_buffer_energie stored in the database...')
 
-	return
+	pd.reset_option('display.max_columns')
+	return plan_df
 
 
 
 def main(*args, **kwargs):
 	try:
-		Logger.info("HP_Optimizer started....")
-		# er zijn argumenten met de commandline meegegeven, dus automatisch script
-		predict_heatingpower(msg='Ran as preparation for HP_Optimizer...')
-		make_hp_plan(store_plan=True)
+		Logger.info("predict_heatingpower started started by user....")
+		power_forecast = predict_heatingpower(store_in_db=True)
+		Logger.info("make_hp_plan started started by user....")
+		make_hp_plan(power_forecast=power_forecast, store_in_db=True)
 
 	except KeyboardInterrupt:
 		Logger.error ("Cancelled from keyboard....")

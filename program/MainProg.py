@@ -32,7 +32,7 @@ from Config import CWD, DBFILE, LOGFILELOCATION, Loglevel, ENVIRONMENT, DB_loopt
 import Common_Data
 from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, DB_STORE, JSEM_RULES
 from JSEM_Commons import expandcollapse, Calculate_Timerset
-from Common_Utils import get_extra_css, get_ip_address, Waitkey, get_seconds_untill
+from common_utils import get_extra_css, get_ip_address, Waitkey, get_seconds_untill
 import remi.gui as gui
 from remi.gui import *
 from remi import start, App
@@ -269,8 +269,10 @@ if __name__ == "__main__":
 	Common_Data.JSEM_RULES.append(
 								JSEM_Rule(name="Warmtepomp optimalisatie algoritme",
 								rule=JSEM_Rules.optimizer,
+								# interval=60,
 								interval=3600,
-								startup_delay= 3600 - int(datetime.now().timestamp()) % 3600,
+								startup_delay= 3600 - int(datetime.now().timestamp()) % 3600 + 30,		# 30 seconden na het hele uur
+								# startup_delay= 60,
 								start=True)
 								)
 	

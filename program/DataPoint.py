@@ -427,7 +427,7 @@ class Datapoint(object):
 				return
 
 			if self.interface is not None:
-				# als er een interfaceis voor dit datapoint... dan zenden we de input naar die interface
+				# als er een interface is voor dit datapoint... dan zenden we de input naar die interface
 				self.interface.make_command_telgr(self, nwvalue)
 			else:
 				# geen interface? dan gewoon de value zetten.. verder niets
