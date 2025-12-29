@@ -36,7 +36,7 @@ from JSEM_GUI_classes import JSEM_Label, JSEM_Stacked_Bar, JSEM_BalancedGauge, J
 from JSEM_GUI_classes import JSEM_Bar_Chart, JSEM_Line_Chart, JSEM_Rect, JSEM_Arrow, JSEM_Buffer, JSEM_MultiArrow, JSEM_WeatherIcon
 from remi_addons import Switch, PushBtn
 
-from program.DataPoint import Datapoint
+from DataPoint import Datapoint
 
 DataCont = Common_Data.DATA_PARENT_CONTAINER
 

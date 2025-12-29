@@ -23,7 +23,7 @@ from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, CATEGORY_ID, CATEGORY_NA
 import remi.gui as gui
 import errno
 
-from program import sdm_modbus
+import sdm_modbus
 from sdm_modbus import *
 from pyShelly import pyShelly
 

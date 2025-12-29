@@ -8,9 +8,9 @@ from LogRoutines import Logger
 from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME
 from datetime import datetime
 
-from program.Epex_Leba_data_download import get_epex_leba_data, HEADERS, PROVIDERS
-from program.HP_Optimizer import make_hp_plan, predict_heatingpower
-from program.MeteoServer_Forecast import get_meteoserver_forecast
+from Epex_Leba_data_download import get_epex_leba_data, HEADERS, PROVIDERS
+from HP_Optimizer import make_hp_plan, predict_heatingpower
+from MeteoServer_Forecast import get_meteoserver_forecast
 
 
 # from dateutil.relativedelta import relativedelta

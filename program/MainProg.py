@@ -2,10 +2,15 @@ import pathlib
 import sys
 import __main__
 
+# print(sys.path)
+sys.path.append('/home/jandirk/common_addons/common_addons')
+# print(sys.path)
+# input('any')
 
 if __name__ == "__main__":
 	__main__.logfilename = "JSEM.log"
 	__main__.backupcount = 5
+
 
 from LogRoutines import Logger
 
@@ -224,8 +229,8 @@ if __name__ == "__main__":
 	SdmModbusInterface(name="Solar", auto_start=True)
 
 	Logger.info ("Initializing Slimmemeter - ESMR 5.0")
-	# ESMR50Interface(name="Slimmemeter", auto_start=True)
-	ESMR50_via_TCP(name="Slimmemeter", auto_start=True, address='192.168.178.220', port=65432, conn_type="DEFAULT-TCP")
+	ESMR50Interface(name="Slimmemeter", auto_start=True)
+	# ESMR50_via_TCP(name="Slimmemeter", auto_start=True, address='192.168.178.220', port=65432, conn_type="DEFAULT-TCP")
 
 	Logger.info ("Initializing Vermogensmeters - M_bus")
 	MbusInterface(name="Vermogensmeters", auto_start=True)
@@ -358,21 +363,21 @@ if __name__ == "__main__":
 	try:
 		# start(JSEM, debug=False, address='192.168.178.220', port=8081)
 		
-		# start	(
-		# 		JSEM, debug=False, address='192.168.178.220', port=8081,
-		# 		multiple_instance=False,
-		# 		enable_file_cache=True,
-		# 		start_browser=False
-		# 		# username="jdderijke@yahoo.com", password="Jsem@Jd878481"
-		# 		)
-
 		start	(
-				JSEM, debug=False, address='127.0.0.1', port=8081,
+				JSEM, debug=False, address='192.168.178.220', port=8081,
 				multiple_instance=False,
 				enable_file_cache=True,
-				start_browser=True
+				start_browser=False
 				# username="jdderijke@yahoo.com", password="Jsem@Jd878481"
 				)
+
+		# start	(
+				# JSEM, debug=False, address='127.0.0.1', port=8081,
+				# multiple_instance=False,
+				# enable_file_cache=True,
+				# start_browser=True
+				# # username="jdderijke@yahoo.com", password="Jsem@Jd878481"
+				# )
 
 		# Als de GUI loopt dan blijft hij meestal in de regel hierboven loopen, als we door deze regel heenvallen 
 		# (dit kan gebeuren als er een control-C vanaf de terminal is ingetypt, of omdat de close() routine is aangeroepen

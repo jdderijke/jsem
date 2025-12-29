@@ -25,7 +25,7 @@ import __main__
 if __name__ == "__main__": __main__.logfilename = "Conversion_Routines.log"
 
 from datetime import datetime
-from LogRoutines import Logger
+# from LogRoutines import Logger
 from collections import OrderedDict
 from pyModbusTCP.utils import decode_ieee, encode_ieee
 import csv
