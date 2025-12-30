@@ -294,7 +294,7 @@ if __name__ == "__main__":
 								JSEM_Rule(name="EPEX data downloader",
 								rule=JSEM_Rules.get_epex_data,
 								interval=24*3600,
-								startup_delay= get_seconds_untill(untill_time='15:00:00'),
+								startup_delay= get_seconds_untill(untill_time='16:00:00'),
 								start=True)
 								)
 
@@ -347,12 +347,11 @@ if __name__ == "__main__":
 								start=True)
 								)
 
-
-	# if ENVIRONMENT==Environment.Productie and Reboot_time != "":
-	# 	timerset,repeat = Calculate_Timerset(interval=Reboot_time)
-	# 	Logger.info ("Setting up automatic reboot, at %s, timerset = %s s" % (Reboot_time, timerset))
-	# 	reboot_timer = threading.Timer(timerset, auto_reboot_callback)
-	# 	reboot_timer.start()
+	# Set up s timer to automatically force a reboot every night
+	timerset = get_seconds_untill(untill_time=Reboot_time)
+	Logger.info (f"Setting up automatic reboot, at {Reboot_time}, timer set for {timerset} seconds")
+	reboot_timer = threading.Timer(timerset, auto_reboot_callback)
+	reboot_timer.start()
 
 	
 	

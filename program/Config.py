@@ -130,7 +130,7 @@ DB_alivetime = 1800
 MsgQ_Alarm = 10
 
 # Time in the day, month etc that the system must perform a save reboot, empty means NO reboot EVER.
-Reboot_time = "04:00:00"
+Reboot_time = "04:15:00"
 
 # Charts Settings
 
