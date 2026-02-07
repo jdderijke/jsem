@@ -15,9 +15,9 @@ Loglevel = logging.INFO
 # Loglevel = logging.ERROR
 
 # System settings
-ENVIRONMENT = Environment.Productie
+# ENVIRONMENT = Environment.Productie
 # ENVIRONMENT = Environment.Test_full
-# ENVIRONMENT = Environment.Test_data
+ENVIRONMENT = Environment.Test_data
 
 BTW_PERC = 21
 

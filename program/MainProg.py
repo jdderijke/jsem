@@ -230,7 +230,7 @@ if __name__ == "__main__":
 
 	Logger.info ("Initializing Warmtepomp - WS172 H3")
 	SdmModbusInterface(name="Warmtepomp", auto_start=True)
-	
+
 	Logger.info ("Starting Zonnepanelen - Solis 3p5K-4g")
 	SdmModbusInterface(name="Solar", auto_start=True)
 
@@ -241,8 +241,8 @@ if __name__ == "__main__":
 	Logger.info ("Initializing Vermogensmeters - M_bus")
 	MbusInterface(name="Vermogensmeters", auto_start=True)
 
-	# Logger.info ("Initializing laadpaal - Modbus")
-	# SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
+	Logger.info ("Initializing laadpaal - Modbus")
+	SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
 
 	Logger.info ("Initializing SDM72 verm meter - Modbus")
 	SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
@@ -255,8 +255,6 @@ if __name__ == "__main__":
 	
 	Logger.info ("Initializing Woning voelers - Modbus")
 	SdmModbusInterface(name="Woning", auto_start=True)
-
-
 
 	Logger.info ("Loading datapoints definitions")
 	load_and_configure_datapoints()
@@ -277,7 +275,7 @@ if __name__ == "__main__":
 	else:
 		found_address = HOST
 		
-	if MAX_EXTERNAL_CONN > 0:
+	if ENVIRONMENT == Environment.Productie and MAX_EXTERNAL_CONN > 0:
 		# Here I start a parallel thread that executes the TCP server
 		t = threading.Thread(target=TCPServer, kwargs=dict(host=found_address, port=found_tcpport, max_connections=MAX_EXTERNAL_CONN))
 		t.daemon = True
@@ -377,21 +375,22 @@ if __name__ == "__main__":
 		signal.signal(signal.SIGUSR1, appexit_callback)
 		signal.signal(signal.SIGUSR2, reboot_callback)
 		
-		start	(
-				JSEM, debug=False, address='192.168.178.220', port=8081,
-				multiple_instance=False,
-				enable_file_cache=True,
-				start_browser=False
-				# username="jdderijke@yahoo.com", password="Jsem@Jd878481"
-				)
-
-		# start	(
-				# JSEM, debug=False, address='127.0.0.1', port=8081,
-				# multiple_instance=False,
-				# enable_file_cache=True,
-				# start_browser=True
-				# # username="jdderijke@yahoo.com", password="Jsem@Jd878481"
-				# )
+		if ENVIRONMENT == Environment.Productie:
+			start	(
+					JSEM, debug=False, address='192.168.178.220', port=8081,
+					multiple_instance=False,
+					enable_file_cache=True,
+					start_browser=False
+					# username="jdderijke@yahoo.com", password="Jsem@Jd878481"
+					)
+		else:
+			start	(
+					JSEM, debug=False, address='127.0.0.1', port=8081,
+					multiple_instance=False,
+					enable_file_cache=True,
+					start_browser=True
+					# username="jdderijke@yahoo.com", password="Jsem@Jd878481"
+					)
 
 		# Als de GUI loopt dan blijft hij meestal in de regel hierboven loopen, als we door deze regel heenvallen 
 		# (dit kan gebeuren als er een control-C vanaf de terminal is ingetypt, of omdat de close() routine is aangeroepen

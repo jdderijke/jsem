@@ -839,14 +839,14 @@ class SdmModbusInterface(BaseInterface):
 				result = {}
 				try:
 					if key.lower() in ['all','readall','read_all','alles', 'all_registers', 'alle_registers']:
-						result = self.Modbus_Conn.read_all(sdm_modbus.registerType.INPUT, scaling=True)
-						result.update(self.Modbus_Conn.read_all(sdm_modbus.registerType.HOLDING, scaling=True))
-						result.update(self.Modbus_Conn.read_all(sdm_modbus.registerType.COIL, scaling=False))
-						result.update(self.Modbus_Conn.read_all(sdm_modbus.registerType.DISCR_INPUT, scaling=False))
+						result = self.Modbus_Conn.read_all(meter.registerType.INPUT, scaling=True)
+						result.update(self.Modbus_Conn.read_all(meter.registerType.HOLDING, scaling=True))
+						result.update(self.Modbus_Conn.read_all(meter.registerType.COIL, scaling=False))
+						result.update(self.Modbus_Conn.read_all(meter.registerType.DISCR_INPUT, scaling=False))
 					elif key.lower() in ['all_inputs', 'input', 'inputs', 'inputregisters', 'input_registers']:
-						result = self.Modbus_Conn.read_all(sdm_modbus.registerType.INPUT, scaling=True)
+						result = self.Modbus_Conn.read_all(meter.registerType.INPUT, scaling=True)
 					elif key.lower() in ['all_holdings', 'holdings', 'holding', 'holdingregisters', 'holding_registers']:
-						result = self.Modbus_Conn.read_all(sdm_modbus.registerType.HOLDING, scaling=True)
+						result = self.Modbus_Conn.read_all(meter.registerType.HOLDING, scaling=True)
 					else:
 						result = {key:self.Modbus_Conn.read(key)}
 				except ConnectionError:
