@@ -24,8 +24,8 @@ from Config import HOST, PORT, DBFILE, DB_RETRIES, DB_WAITBETWEENRETRIES, Max_Ch
 
 from enum import Enum
 
-from program.Config import USE_REMOTE_JSEM_DB
-from program.TCP_Routines import tcp_sql_query
+from Config import USE_REMOTE_JSEM_DB
+from TCP_Routines import tcp_sql_query
 
 
 # Connections = {}

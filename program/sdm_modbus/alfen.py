@@ -1,4 +1,4 @@
-from program.sdm_modbus import meter
+from sdm_modbus import meter
 
 
 class ALFEN(meter.Meter):

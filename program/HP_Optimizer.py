@@ -1,7 +1,11 @@
 
 import __main__
 from pathlib import Path
+import sys
 
+if not '/home/jandirk/common_addons/common_addons' in sys.path:
+	sys.path.append('/home/jandirk/common_addons/common_addons')
+	
 from common_utils import get_newest_file, normalize_data
 
 if __name__ == "__main__":
@@ -353,7 +357,7 @@ def main(*args, **kwargs):
 		Logger.info("predict_heatingpower started started by user....")
 		power_forecast = predict_heatingpower(store_in_db=True)
 		Logger.info("make_hp_plan started started by user....")
-		make_hp_plan(power_forecast=power_forecast, pph=4, store_in_db=False)
+		make_hp_plan(power_forecast=power_forecast, pph=4, store_in_db=True)
 
 	except KeyboardInterrupt:
 		Logger.error ("Cancelled from keyboard....")

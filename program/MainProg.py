@@ -3,7 +3,7 @@ import sys
 import __main__
 
 # print(sys.path)
-# sys.path.append('/home/jandirk/common_addons/common_addons')
+sys.path.append('/home/jandirk/common_addons/common_addons')
 # print(sys.path)
 # input('any')
 
@@ -32,7 +32,7 @@ import signal
 import sys
 import os
 
-from Config import TCPPORT, TCPHOST, MAX_EXTERNAL_CONN
+from Config import PORT, HOST, MAX_EXTERNAL_CONN
 from Config import CWD, DBFILE, LOGFILELOCATION, Loglevel, ENVIRONMENT, DB_looptime, DB_alivetime, Reboot_time
 import Common_Data
 from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, DB_STORE, JSEM_RULES
@@ -229,27 +229,30 @@ if __name__ == "__main__":
 	Logger.info ("Initializing Warmtepomp - WS172 H3")
 	SdmModbusInterface(name="Warmtepomp", auto_start=True)
 	#
-	# Logger.info ("Starting Zonnepanelen - Solis 3p5K-4g")
-	# SdmModbusInterface(name="Solar", auto_start=True)
+	Logger.info ("Starting Zonnepanelen - Solis 3p5K-4g")
+	SdmModbusInterface(name="Solar", auto_start=True)
 
-	# Logger.info ("Initializing Slimmemeter - ESMR 5.0")
-	# # ESMR50Interface(name="Slimmemeter", auto_start=True)
+	Logger.info ("Initializing Slimmemeter - ESMR 5.0")
+	ESMR50Interface(name="Slimmemeter", auto_start=True)
 	# ESMR50_via_TCP(name="Slimmemeter", auto_start=True, address='192.168.178.220', port=65432, conn_type="DEFAULT-TCP")
 
-	# Logger.info ("Initializing Vermogensmeters - M_bus")
-	# MbusInterface(name="Vermogensmeters", auto_start=True)
+	Logger.info ("Initializing Vermogensmeters - M_bus")
+	MbusInterface(name="Vermogensmeters", auto_start=True)
 
-	# Logger.info ("Initializing laadpaal - Modbus")
-	# SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
+	Logger.info ("Initializing laadpaal - Modbus")
+	SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
 
-	# Logger.info ("Initializing SDM72 verm meter - Modbus")
-	# SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
+	Logger.info ("Initializing SDM72 verm meter - Modbus")
+	SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
 	#
-	# Logger.info ("Initializing Zwembadpomp - Shelly")
-	# ShellyRelayInterface(name="Zwembadpomp", device_count=3, auto_start=True)
+	Logger.info ("Initializing Zwembadpomp - Shelly")
+	ShellyRelayInterface(name="Zwembadpomp", device_count=3, auto_start=True)
 
-	Logger.info ("Initializing Vloervoelers - Modbus")
-	SdmModbusInterface(name="Vloer", auto_start=True)
+	# Logger.info ("Initializing Vloervoelers - Modbus")
+	# SdmModbusInterface(name="Vloer", auto_start=True)
+	
+	Logger.info ("Initializing Woning voelers - Modbus")
+	SdmModbusInterface(name="Woning", auto_start=True)
 
 
 
@@ -263,14 +266,14 @@ if __name__ == "__main__":
 	# Start the TCP SQL server to enable remote access to the database
 	# Now first retrieve some network addresses....
 	found_address='127.0.0.1'
-	found_tcpport=65432 if TCPPORT == 0 else TCPPORT
-	if TCPHOST=='':
+	found_tcpport=65432 if PORT == 0 else PORT
+	if HOST=='':
 		try:
 			found_address = get_ip_address()
 		except:
 			Logger.error ("Can't retrieve IP address and none given in config.py file, using localhost 127.0.0.1....")
 	else:
-		found_address = TCPHOST
+		found_address = HOST
 		
 	if MAX_EXTERNAL_CONN > 0:
 		# Here I start a parallel thread that executes the TCP server
@@ -280,73 +283,73 @@ if __name__ == "__main__":
 		Logger.info("TCP-SQL Server proces started on address: %s, port: %s" % (found_address, found_tcpport))
 
 	# start the optimizer on the next hour and then every hour
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="Warmtepomp optimalisatie algoritme",
-	# 							rule=JSEM_Rules.optimizer,
-	# 							# interval=60,
-	# 							interval=3600,
-	# 							startup_delay= 3600 - int(datetime.now().timestamp()) % 3600 + 30,		# 30 seconden na het hele uur
-	# 							# startup_delay= 60,
-	# 							start=True)
-	# 							)
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="Warmtepomp optimalisatie algoritme",
+								rule=JSEM_Rules.optimizer,
+								# interval=60,
+								interval=3600,
+								startup_delay= 3600 - int(datetime.now().timestamp()) % 3600 + 30,		# 30 seconden na het hele uur
+								# startup_delay= 60,
+								start=True)
+								)
 	#
-	# #start the execution of the strategy every minute
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="Warmtepomp strategie 1",
-	# 							rule=JSEM_Rules.warmtepomp_strat_1,
-	# 							interval=60,
-	# 							startup_delay=30,
-	# 							start=True)
-	# 							)
+	#start the execution of the strategy every minute
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="Warmtepomp strategie 1",
+								rule=JSEM_Rules.warmtepomp_strat_1,
+								interval=60,
+								startup_delay=30,
+								start=True)
+								)
 	#
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="EPEX data downloader",
-	# 							rule=JSEM_Rules.get_epex_data,
-	# 							interval=24*3600,
-	# 							startup_delay= get_seconds_untill(untill_time='16:00:00'),
-	# 							start=True)
-	# 							)
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="EPEX data downloader",
+								rule=JSEM_Rules.get_epex_data,
+								interval=24*3600,
+								startup_delay= get_seconds_untill(untill_time='16:00:00'),
+								start=True)
+								)
 	#
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="LEBA data downloader",
-	# 							rule=JSEM_Rules.get_leba_data,
-	# 							interval=24*3600,
-	# 							startup_delay= get_seconds_untill(untill_time='22:00:00'),
-	# 							start=True)
-	# 							)
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="LEBA data downloader",
+								rule=JSEM_Rules.get_leba_data,
+								interval=24*3600,
+								startup_delay= get_seconds_untill(untill_time='22:00:00'),
+								start=True)
+								)
 	#
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="Weather forecast",
-	# 							rule=JSEM_Rules.get_weather_frcst,
-	# 							interval=24*3600,
-	# 							startup_delay= get_seconds_untill(untill_time='23:45:00'),
-	# 							start=True)
-	# 							)
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="Weather forecast",
+								rule=JSEM_Rules.get_weather_frcst,
+								interval=24*3600,
+								startup_delay= get_seconds_untill(untill_time='23:45:00'),
+								start=True)
+								)
 
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="laadpaal_rule_1",
-	# 							rule=JSEM_Rules.laadpaal_rule_1,
-	# 							interval=30,
-	# 							startup_delay=45,
-	# 							start=True)
-	# 							)
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="laadpaal_rule_1",
+								rule=JSEM_Rules.laadpaal_rule_1,
+								interval=30,
+								startup_delay=45,
+								start=True)
+								)
 	#
 
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="zwembad_rule_1",
-	# 							rule=JSEM_Rules.zwembad_rule_1,
-	# 							interval=60,
-	# 							startup_delay=30,
-	# 							start=True)
-	# 							)
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="zwembad_rule_1",
+								rule=JSEM_Rules.zwembad_rule_1,
+								interval=60,
+								startup_delay=30,
+								start=True)
+								)
 	#
-	# Common_Data.JSEM_RULES.append(
-	# 							JSEM_Rule(name="solar_rule_1",
-	# 							rule=JSEM_Rules.solar_rule_1,
-	# 							interval=60,
-	# 							startup_delay=30,
-	# 							start=True)
-	# 							)
+	Common_Data.JSEM_RULES.append(
+								JSEM_Rule(name="solar_rule_1",
+								rule=JSEM_Rules.solar_rule_1,
+								interval=60,
+								startup_delay=30,
+								start=True)
+								)
 	#
 	Common_Data.JSEM_RULES.append(
 								JSEM_Rule(name="load_balance_rule",
@@ -372,21 +375,21 @@ if __name__ == "__main__":
 		signal.signal(signal.SIGUSR1, appexit_callback)
 		signal.signal(signal.SIGUSR2, reboot_callback)
 		
-		# start	(
-		# 		JSEM, debug=False, address='192.168.178.220', port=8081,
-		# 		multiple_instance=False,
-		# 		enable_file_cache=True,
-		# 		start_browser=False
-		# 		# username="jdderijke@yahoo.com", password="Jsem@Jd878481"
-		# 		)
-
 		start	(
-				JSEM, debug=False, address='127.0.0.1', port=8081,
+				JSEM, debug=False, address='192.168.178.220', port=8081,
 				multiple_instance=False,
 				enable_file_cache=True,
-				start_browser=True
+				start_browser=False
 				# username="jdderijke@yahoo.com", password="Jsem@Jd878481"
 				)
+
+		# start	(
+				# JSEM, debug=False, address='127.0.0.1', port=8081,
+				# multiple_instance=False,
+				# enable_file_cache=True,
+				# start_browser=True
+				# # username="jdderijke@yahoo.com", password="Jsem@Jd878481"
+				# )
 
 		# Als de GUI loopt dan blijft hij meestal in de regel hierboven loopen, als we door deze regel heenvallen 
 		# (dit kan gebeuren als er een control-C vanaf de terminal is ingetypt, of omdat de close() routine is aangeroepen
