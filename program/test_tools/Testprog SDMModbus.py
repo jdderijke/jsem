@@ -1,10 +1,22 @@
-import program.sdm_modbus
+
+
+
+import sys
+
+# print(sys.path)
+sys.path.append('/home/jandirk/jsem/program')
+sys.path.append('/home/jandirk/common_addons/common_addons')
+sys.path.append('/home/jandirk/jsem/program/sdm_modbus')
+# print(sys.path)
+# input('any')
+
+import sdm_modbus
 import pymodbus
 
 if __name__ == "__main__":
 	print (pymodbus.__version__)
 
-	laadpaal = program.sdm_modbus.ALFEN_NG9xx(
+	laadpaal = sdm_modbus.ALFEN_NG9xx(
 		host='192.168.178.140',
 		port=502,
 		timeout=1,

@@ -1,11 +1,15 @@
 import pathlib
 import sys
 import __main__
+from Config import ENVIRONMENT
+from Common_Enums import Environment
 
-# print(sys.path)
-sys.path.append('/home/jandirk/common_addons/common_addons')
-# print(sys.path)
-# input('any')
+if ENVIRONMENT == Environment.Productie:
+	# print(sys.path)
+	sys.path.append('/home/jandirk/common_addons/common_addons')
+	sys.path.append('/home/jandirk/jsem/program/sdm_modbus')
+	# print(sys.path)
+	# input('any')
 
 if __name__ == "__main__":
 	__main__.logfilename = "JSEM.log"
@@ -15,7 +19,6 @@ if __name__ == "__main__":
 from LogRoutines import Logger
 
 import JSEM_Rules
-
 
 import GUI_routines
 from GUI_routines import show_all
@@ -29,7 +32,6 @@ from datetime import datetime
 import threading
 import random
 import signal
-import sys
 import os
 
 from Config import PORT, HOST, MAX_EXTERNAL_CONN
@@ -228,7 +230,7 @@ if __name__ == "__main__":
 
 	Logger.info ("Initializing Warmtepomp - WS172 H3")
 	SdmModbusInterface(name="Warmtepomp", auto_start=True)
-	#
+	
 	Logger.info ("Starting Zonnepanelen - Solis 3p5K-4g")
 	SdmModbusInterface(name="Solar", auto_start=True)
 
@@ -239,8 +241,8 @@ if __name__ == "__main__":
 	Logger.info ("Initializing Vermogensmeters - M_bus")
 	MbusInterface(name="Vermogensmeters", auto_start=True)
 
-	Logger.info ("Initializing laadpaal - Modbus")
-	SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
+	# Logger.info ("Initializing laadpaal - Modbus")
+	# SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
 
 	Logger.info ("Initializing SDM72 verm meter - Modbus")
 	SdmModbusInterface(name="Verm_meter_WP", auto_start=True)

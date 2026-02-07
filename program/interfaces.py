@@ -817,6 +817,7 @@ class SdmModbusInterface(BaseInterface):
 						self.sndstate = Sndstate.Sending_Msg
 						self.recstate = Recstate.Receiving_Msg
 						result=self.Modbus_Conn.read(self.awake_registername)
+						# time.sleep(0.2)
 						# Write back to the same register to let the device know we are awake
 						self.Modbus_Conn.write(self.awake_registername,result)
 						if self.localecho_send_messages:
