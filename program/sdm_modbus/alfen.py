@@ -1,4 +1,4 @@
-from sdm_modbus import meter
+from program.sdm_modbus import meter
 
 
 class ALFEN(meter.Meter):
@@ -98,6 +98,7 @@ class ALFEN_NG9xx(ALFEN):
 			
 			"actual_max_current": (1206, 2, meter.registerType.HOLDING, meter.registerDataType.FLOAT32, float, "Actual Max Current", "A", 2, 1),
 			"remaining_valid_time": (1208, 2, meter.registerType.HOLDING, meter.registerDataType.UINT32, int, "Remaining Valid Time", "s", 2, 1),
+			# "max_current_setpoint": (1210, 1, meter.registerType.HOLDING, meter.registerDataType.UINT16, int, "Max Current Setpoint", "A", 2, 1),
 			"max_current_setpoint": (1210, 2, meter.registerType.HOLDING, meter.registerDataType.FLOAT32, float, "Max Current Setpoint", "A", 2, 1),
 			"alb_safe_current": (1212, 2, meter.registerType.HOLDING, meter.registerDataType.FLOAT32, float, "ALB Safe Current", "A", 2, 1),
 			"setpoint_accepted": (1214, 1, meter.registerType.HOLDING, meter.registerDataType.UINT16, int, "Setpoit Accepted", "", 2, 1),

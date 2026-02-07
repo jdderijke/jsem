@@ -27,11 +27,12 @@ BTW_PERC = 21
 # Specify the MAXIMUM number of external connections accepted by the system, 0=No external connection allowed
 MAX_EXTERNAL_CONN = 1
 # Port for TCP commando server to listen on (non-privileged ports are > 1023), when 0 is used the system uses default 65432
-TCPPORT = 65432
+PORT = 65432
 # IP address to use, if None or empty then system local IP address will be used, see log file at startup for used IP address.
 # TCPHOST = "192.168.4.1"
-TCPHOST = ""
-
+HOST = "192.168.178.220"
+# Use the remote JSEM database for all database transactions, this feature is used in testing...
+USE_REMOTE_JSEM_DB = False
 
 
 # Current Working Directory... define the path to the directory of the running script... (which is not always pathlib.Path.cwd())

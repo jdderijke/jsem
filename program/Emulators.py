@@ -272,23 +272,23 @@ def ByteArrayToHexString(ByteArray):
 
 
 
-if __name__ == '__main__':
-	
-	# Test Serial_Emulator
-	print ('Cntrl-C to flush inputbuffer (reset), cntrl-C twice to exit...')
-	print ()
-	test = Serial_Stub()
-	test.open()
-	while True:
-		try:
-			print(f'>>>>> {test.readline()}')
-		except KeyboardInterrupt:
-			try:
-				test.flushInput()
-				time.sleep(0.5)
-			except KeyboardInterrupt:
-				break
-	test.close()
+# if __name__ == '__main__':
+#
+# 	# Test Serial_Emulator
+# 	print ('Cntrl-C to flush inputbuffer (reset), cntrl-C twice to exit...')
+# 	print ()
+# 	test = Serial_Stub()
+# 	test.open()
+# 	while True:
+# 		try:
+# 			print(f'>>>>> {test.readline()}')
+# 		except KeyboardInterrupt:
+# 			try:
+# 				test.flushInput()
+# 				time.sleep(0.5)
+# 			except KeyboardInterrupt:
+# 				break
+# 	test.close()
 	
 	
 	# # TCPUDP_Emulator test

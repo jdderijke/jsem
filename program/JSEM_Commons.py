@@ -812,7 +812,7 @@ epex_data = 214	# Datapoint ID of the Epex data
 epex_pred = 334
 
 
-def get_all_epexinfo(start_dt:datetime=datetime.now(), plan_hours=None):
+def get_all_epexinfo(start_dt:datetime=datetime.now(), plan_hours=None, granularity='60min', **kwargs):
 	"""
 	This routine return a dataframe with EPEX info consisting of downloaded EPEX info and EPEX predictions
 	done by a separate prediction model. Only a continuous set of hours will be returned... so if hours start
@@ -833,9 +833,9 @@ def get_all_epexinfo(start_dt:datetime=datetime.now(), plan_hours=None):
 
 	# now get all the epex_data starting from start_dt hour
 	epex_data_df = get_df_from_database(dpIDs=[epex_data], selected_startdate=selected_startdate, selected_enddate=selected_enddate, 
-												add_datetime_column=True)
+												add_datetime_column=True, **kwargs)
 	# then get the predictions (if any)
-	epex_pred_df = get_df_from_database(dpIDs=[epex_pred], selected_startdate=selected_startdate, selected_enddate=selected_enddate)
+	epex_pred_df = get_df_from_database(dpIDs=[epex_pred], selected_startdate=selected_startdate, selected_enddate=selected_enddate, **kwargs)
 	
 	# met een outer join/merge worden de rijen allemaal gecombineerd van beide dataframes, NaN voor missende values
 	epex_df = epex_data_df.merge(epex_pred_df[['timestamp','epex_pred']], how='outer', on="timestamp")

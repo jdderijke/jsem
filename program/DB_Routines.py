@@ -19,11 +19,13 @@ from DataPoint import Datapoint, Category, Pollmessage, Protocol
 from JSEM_Commons import get_type, dump, IsNot_NOE, Is_NOE, Waitkey, Calculate_Timerset, Calculate_Period
 from JSEM_Commons import cursor_to_dict, update_progressbar, get_begin_of_week
 
-from Config import TCPPORT, DBFILE, DB_RETRIES, DB_WAITBETWEENRETRIES, Max_Chart_Points, DB_alivetime, DB_looptime
+from Config import HOST, PORT, DBFILE, DB_RETRIES, DB_WAITBETWEENRETRIES, Max_Chart_Points, DB_alivetime, DB_looptime
 # from TCP_Routines import tcp_sql_query
 
 from enum import Enum
 
+from program.Config import USE_REMOTE_JSEM_DB
+from program.TCP_Routines import tcp_sql_query
 
 
 # Connections = {}
@@ -240,14 +242,15 @@ def get_value_from_database(dpID=None, ts=None, match=MatchTimestamp.lastpreviou
 		Logger.error("Illegal or missing argument dpID")
 		return None
 
-	CONN=sqlite3.connect(DBFILE, uri=True)
 	datatype = None
 	decimals = None
 	dp = None
 	try:
 		# Load the dp to get the datatype and decimals
-		if dpID in DATAPOINTS_ID: dp = DATAPOINTS_ID[dpID]
-		else: dp = load_datapoint(dpID, db_conn=CONN )
+		if dpID in DATAPOINTS_ID:
+			dp = DATAPOINTS_ID[dpID]
+		else:
+			dp = load_datapoint(dpID)
 		if dp is None:
 			Logger.error("%s-- DatapointID does not exist, or its enabled property is NULL.." % dpID)
 			return None
@@ -257,44 +260,51 @@ def get_value_from_database(dpID=None, ts=None, match=MatchTimestamp.lastpreviou
 		
 		# check if a timestamp was passed as an argument, if not... use NOW
 		if not ts: ts = int(datetime.timestamp(datetime.now()))
-		
-		if match==MatchTimestamp.firstnext and tolerance is not None:
-			query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp>=%s AND timestamp<=%s ORDER BY timestamp ASC LIMIT 1" % \
-								(dpID, ts, ts+tolerance)
-		elif match==MatchTimestamp.firstnext and tolerance is None:
-			query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp>=%s ORDER BY timestamp ASC LIMIT 1" % (dpID, ts)
-			
-		elif match == MatchTimestamp.lastprevious and tolerance is not None:
-			query = f"SELECT * FROM 'Values' WHERE datapointID={dpID} AND timestamp<={ts} AND timestamp>={ts-tolerance} ORDER BY timestamp DESC LIMIT 1"
-			# print(query)
-		elif match == MatchTimestamp.lastprevious and tolerance is None:
-			query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp<=%s ORDER BY timestamp DESC LIMIT 1" % (dpID, ts)
-								
-		elif match == MatchTimestamp.exact_match and tolerance is not None:
-			query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp>=%s AND timestamp<=%s LIMIT 1" % (dpID, ts-tolerance, ts+tolerance)
-			
-		elif match == MatchTimestamp.exact_match and tolerance is None:
-			query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp=%s LIMIT 1" % (dpID, ts)
+		query = f"SELECT * FROM 'Values' WHERE datapointID={dpID} AND timestamp<={ts} ORDER BY timestamp DESC LIMIT 1"
+
+		# if match==MatchTimestamp.firstnext and tolerance is not None:
+		# 	query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp>=%s AND timestamp<=%s ORDER BY timestamp ASC LIMIT 1" % \
+		# 						(dpID, ts, ts+tolerance)
+		# elif match==MatchTimestamp.firstnext and tolerance is None:
+		# 	query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp>=%s ORDER BY timestamp ASC LIMIT 1" % (dpID, ts)
+		#
+		# elif match == MatchTimestamp.lastprevious and tolerance is not None:
+		# 	query = f"SELECT * FROM 'Values' WHERE datapointID={dpID} AND timestamp<={ts} AND timestamp>={ts-tolerance} ORDER BY timestamp DESC LIMIT 1"
+		# 	# print(query)
+		# elif match == MatchTimestamp.lastprevious and tolerance is None:
+		# 	query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp<=%s ORDER BY timestamp DESC LIMIT 1" % (dpID, ts)
+		#
+		# elif match == MatchTimestamp.exact_match and tolerance is not None:
+		# 	query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp>=%s AND timestamp<=%s LIMIT 1" % (dpID, ts-tolerance, ts+tolerance)
+		#
+		# elif match == MatchTimestamp.exact_match and tolerance is None:
+		# 	query = "SELECT * FROM 'Values' WHERE datapointID=%s AND timestamp=%s LIMIT 1" % (dpID, ts)
 				
-		# print (query)
-		# Waitkey()
-		data = CONN.execute(query)
-		dbresult = cursor_to_dict(data, output=Dictionary.of_values)
-		# print (dbresult)
-		# Waitkey()
-		if dbresult['value'] is None:
-			return None
-		if datatype is not None: 
-			result = datatype(dbresult['value'])
-			if type(result) == float and decimals is not None: result = round(result, decimals)
+		
+		if USE_REMOTE_JSEM_DB:
+			data, _ = tcp_sql_query(query=query)
+		else:
+			# Create a DB connection if needed
+			try:
+				db_conn = sqlite3.connect(DBFILE, uri=True)
+				data = pd.read_sql_query(query, db_conn)
+			except sqlite3.Error as err:
+				Logger.exception(str(err))
+			finally:
+				db_conn.close()
+				
+		if data.empty: return None
+		
+		if datatype is not None:
+			result = datatype(data['value'].iloc[0])
+			if type(result) == float and decimals is not None:
+				result = round(result, decimals)
 			return result
 		else:
-			Logger.error('%s-- Datapoint has no datatype specified, assuming STRing' % dp.name)
-			return str(dbresult['value'])
+			Logger.error(f'{dp.name}-- Datapoint has no datatype specified, assuming STRing')
+			return str(data['value'].iloc[0])
 	except Exception as err:
 		Logger.exception (str(err))
-	finally:
-		CONN.close()
 
 
 def query_values_from_database(query=None):
@@ -314,13 +324,10 @@ def query_values_from_database(query=None):
 		CONN.close()
 
 
-def store_df_in_database(df=None, use_remote_JSEM_DB=False, host=None, port=None, **kwargs):
+def store_df_in_database(df=None, **kwargs):
 	from TCP_Routines import tcp_sql_query
 	
 	if df is None: return
-	if use_remote_JSEM_DB and (host is None or port is None): 
-		Logger.error('No host or port specified for remote DB')
-		return None
 
 	CONN=None
 	query=''
@@ -340,8 +347,8 @@ def store_df_in_database(df=None, use_remote_JSEM_DB=False, host=None, port=None
 		
 		query = 'insert into \'%s\' %s values %s' % (table, columnnames, values_string)
 
-		if use_remote_JSEM_DB:
-			return(tcp_sql_query(query=query, host=HOST, port=PORT))
+		if USE_REMOTE_JSEM_DB:
+			return(tcp_sql_query(query=query))
 		elif not store_direct:
 			Common_Data.DB_STORE.add_query(query)
 		else:
@@ -366,7 +373,7 @@ def store_df_in_database(df=None, use_remote_JSEM_DB=False, host=None, port=None
 
 # --------------------------------------------------------------
 
-def load_dps_df(dpIDs=[], use_remote_JSEM_DB=False):
+def load_dps_df(dpIDs=[]):
 	'''
 	Loads all properties of an ENABLED datapoint into a dataframe and returns that dataframe
 	'''
@@ -376,8 +383,8 @@ def load_dps_df(dpIDs=[], use_remote_JSEM_DB=False):
 	# Create a DB connection
 	try:
 		query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL AND ID IN %s" % dpID_string
-		if use_remote_JSEM_DB:
-			dps_df, _ = tcp_sql_query(query=query, host=HOST, port=PORT)
+		if USE_REMOTE_JSEM_DB:
+			dps_df, _ = tcp_sql_query(query=query)
 		else:
 			CONN=sqlite3.connect(DBFILE, uri=True)
 			dps_df = pd.read_sql_query(query, CONN)
@@ -388,7 +395,7 @@ def load_dps_df(dpIDs=[], use_remote_JSEM_DB=False):
 		if CONN: CONN.close()
 
 
-def get_min_max_timestamps (dpIDs=[], pathto_local_DBfile=None, use_remote_JSEM_DB=False):
+def get_min_max_timestamps (dpIDs=[], pathto_local_DBfile=None):
 	# returns the lowest min and the highest max values for the timestamps of the dpIDs
 	CONN=None
 	
@@ -403,10 +410,10 @@ def get_min_max_timestamps (dpIDs=[], pathto_local_DBfile=None, use_remote_JSEM_
 			query = "SELECT min(timestamp) AS min, max(timestamp) AS max FROM 'Values'"
 		# print(query)
 		# input('Any key..')
-		if use_remote_JSEM_DB:
-			result_df, stats_df = tcp_sql_query(query=query, host=HOST, port=PORT)
-			print(stats_df)
-			print(result_df)
+		if USE_REMOTE_JSEM_DB:
+			result_df, stats_df = tcp_sql_query(query=query)
+			# print(stats_df)
+			# print(result_df)
 		else:
 			CONN=sqlite3.connect(dbfile, uri=True)
 			result_df = pd.read_sql_query(query, CONN)
@@ -485,8 +492,7 @@ def create_leading_timestamps(startdate, enddate, datagrouping):
 	
 def get_df_from_database(	dpIDs=[], dataselection=DataSelection.Day, datagrouping=DatabaseGrouping.All, aggregation=Aggregation.Not,
 							selected_startdate:datetime=None, selected_enddate:datetime=None, dataselection_date=None, maxrows=None,
-							IDs_as_columnheaders=False, add_datetime_column=False, merge_tolerance=3600-10, 
-							use_remote_JSEM_DB = False, host=None, port=None):
+							IDs_as_columnheaders=False, add_datetime_column=False, merge_tolerance=3600-10):
 	"""
 	This routine returns a Pandas dataframe with the values of the datapoints in columns with the datapoints name or ID as columnname.
 	After the first datapoint..extra datapoints will be added to this dataframe based on their timestamps whereby 
@@ -511,10 +517,6 @@ def get_df_from_database(	dpIDs=[], dataselection=DataSelection.Day, datagroupin
 	:param merge_tolerance:
 							Upon merging 2 datapoints or fitting a datapoint into a fixed time distribution merging happens backwards.
 							merge_tolerance specifies how far backwards a value should be taken into the merged results. Default 1 hour minus 10 seconds.
-	:param use_remote_JSEM_DB:
-							Connect to a remote DB (the JSEM DB) via tcp_sql module, default False
-	:param host:			IP address of remote host
-	:param port:			Port on remote host
 	"""
 	datapoints = []
 	merge_df = None
@@ -522,12 +524,10 @@ def get_df_from_database(	dpIDs=[], dataselection=DataSelection.Day, datagroupin
 	filter_str=''
 	groupby_str=''
 	
-	if use_remote_JSEM_DB and (host is None or port is None): return None
-	
 	if dpIDs == []: return None
 	
-	dps_df = load_dps_df(dpIDs, use_remote_JSEM_DB)
-	min_dbts, max_dbts = get_min_max_timestamps(dpIDs, use_remote_JSEM_DB)
+	dps_df = load_dps_df(dpIDs)
+	min_dbts, max_dbts = get_min_max_timestamps(dpIDs)
 	# als er geen min en max is dan bestaan de dpIDs niet binnen de DB
 	if min_dbts is None or max_dbts is None: return None
 	
@@ -588,8 +588,8 @@ def get_df_from_database(	dpIDs=[], dataselection=DataSelection.Day, datagroupin
 										(dpID, filter_str, groupby_str)
 
 			# Get the data for this datapoint in a dataframe
-			if use_remote_JSEM_DB:
-				dp_df, _ = tcp_sql_query(query=query, host=host, port=port)
+			if USE_REMOTE_JSEM_DB:
+				dp_df, _ = tcp_sql_query(query=query)
 			else:
 				CONN=sqlite3.connect(DBFILE, uri=True)
 				dp_df = pd.read_sql_query(query, CONN)
@@ -945,7 +945,7 @@ def load_lastvalues(dpIDs=[]):
 	finally:
 		CONN.close()
 
-def load_datapoint(dpID=None, dp=None, doNotLoad_list=[], db_conn=None):
+def load_datapoint(dpID=None, dp=None, doNotLoad_list=[]):
 	'''
 	Loads all properties of an ENABLED datapoint into dp (if provided) or creates a new datapoint object and populates that
 	The doNotLoad_list argument can be used to pass the name (case sensitive) of the properties/columns to EXCLUDE
@@ -955,51 +955,50 @@ def load_datapoint(dpID=None, dp=None, doNotLoad_list=[], db_conn=None):
 	if dpID is None:
 		Logger.error("Illegal or missing argument dpID")
 		return None
-		
-	# Create a DB connection if needed
-	if db_conn is None: 
-		db_conn=sqlite3.connect(DBFILE, uri=True)
-		shut_the_door_behind_you = True
-	else:
-		shut_the_door_behind_you = False
-		
-	try:
-		query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL AND ID=%s" % dpID
-		data = db_conn.execute(query)
-
-		col_names = []
-		for col_info in data.description:
-			col_names.append(col_info[0])
-		for row in data:
-			# There should only be 1 row....
-			# If needed, create a new Datapoint object and fill the properties 
-			if dp is None: dp = Datapoint()
-			try:
-				for teller, col in enumerate(row):
-					col_name = col_names[teller]
-					# skip this property if needed
-					if col_name in doNotLoad_list: continue
-					# populate the properties
-					if col_name == "datatype": setattr(dp,col_name,get_type(row[teller]))
-					elif col_name == "enabled": setattr(dp,col_name, bool(row[teller]))
-					elif col_name == "poll": setattr(dp,col_name, bool(row[teller]))
-					elif col_name == "dbstore": setattr(dp,col_name, bool(row[teller]))
-					elif col_name == "log_messages": setattr(dp,col_name, bool(row[teller]))
-					else: setattr(dp,col_names[teller],row[teller])
-				# make sure initial_value and last_value also have the correct datatype
-				if IsNot_NOE(dp.initial_value):
-					dp.initial_value = dp.datatype(dp.initial_value)
-				if IsNot_NOE(dp.last_value):
-					dp.last_value = dp.datatype(dp.last_value)
-			except Exception as err:
-				Logger.error ("Error in load_datapoint", str(err))
-			# return the populated datapoint
-			return dp
-	except Exception as err:
-		Logger.exception ("%s--Error loading and setting properties..%s" % (dp.name if dp is not None else dpID, err))
-	finally:
-		if shut_the_door_behind_you: db_conn.close()
+	query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL AND ID=%s" % dpID
+	shut_the_door_behind_you = False
 	
+	try:
+		if USE_REMOTE_JSEM_DB:
+			data, _ = tcp_sql_query(query=query)
+		else:
+			# Create a DB connection if needed
+			try:
+				db_conn = sqlite3.connect(DBFILE, uri=True)
+				data = pd.read_sql_query(query, db_conn)
+			except sqlite3.Error as err:
+				Logger.exception(str(err))
+			finally:
+				db_conn.close()
+		
+		if data.empty: return None
+		
+		if dp is None: dp = Datapoint()
+		for col_name in data.columns:
+			if col_name in doNotLoad_list: continue
+			# populate the properties
+			value = data[col_name].iloc[0]
+			if col_name == "datatype":
+				setattr(dp, col_name, get_type(value))
+			elif col_name == "enabled":
+				setattr(dp, col_name, bool(value))
+			elif col_name == "poll":
+				setattr(dp, col_name, bool(value))
+			elif col_name == "dbstore":
+				setattr(dp, col_name, bool(value))
+			elif col_name == "log_messages":
+				setattr(dp, col_name, bool(value))
+			else:
+				setattr(dp, col_name, value)
+		# make sure initial_value and last_value also have the correct datatype
+		if IsNot_NOE(dp.initial_value):
+			dp.initial_value = dp.datatype(dp.initial_value)
+		if IsNot_NOE(dp.last_value):
+			dp.last_value = dp.datatype(dp.last_value)
+		return dp
+	except Exception as err:
+		Logger.exception(str(err))
+
 
 def load_datapoints(dpIDs=[], dps=[], doNotLoad_list=[]):
 	'''
@@ -1010,70 +1009,68 @@ def load_datapoints(dpIDs=[], dps=[], doNotLoad_list=[]):
 	These objects will be populated from the database
 	The doNotLoad_list argument can be used to pass the name (case sensitive) of the properties/columns to EXCLUDE from populating from the DB
 	'''
+	if dpIDs == [] and dps == []:
+		# Now load ALL enabled datapoints:
+		query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL"
+		DATAPOINTS_ID.clear()
+		DATAPOINTS_NAME.clear()
+	elif dps != []:
+		dp_list = ','.join(str(dp.ID) for dp in dps)
+		query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL AND ID IN (%s)" % dp_list
+	elif dpIDs != []:
+		dp_list = ','.join(str(ID) for ID in dpIDs)
+		query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL AND ID IN (%s)" % dp_list
+		
+		
 	dp=None
-	CONN=sqlite3.connect(DBFILE, uri=True)
 	try:
-		if dpIDs==[] and dps==[]:
-			# Now load ALL enabled datapoints:
-			query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL"
-			DATAPOINTS_ID.clear()
-			DATAPOINTS_NAME.clear()
-		elif dps != []:
-			dp_list = ','.join(str(dp.ID) for dp in dps)
-			query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL AND ID IN (%s)" % dp_list
-		elif dpIDs != []:
-			dp_list = ','.join(str(ID) for ID in dpIDs)
-			query = "SELECT * FROM Datapoints WHERE enabled IS NOT NULL AND ID IN (%s)" % dp_list
-		data = CONN.execute(query)
-
-		col_names = []
-		for col_info in data.description:
-			col_names.append(col_info[0])
-		dp_teller = 0
-		for row in data:
-			if dps != []: 
-				# use an existing Datapoint object and fill the properties 
-				dp = dps[dp_teller]
-			else:
-				# create a new Datapoint object and fill the properties 
-				dp = Datapoint()
+		if USE_REMOTE_JSEM_DB:
+			data, _ = tcp_sql_query(query=query)
+		else:
+			# Create a DB connection if needed
 			try:
-				for teller, col in enumerate(row):
-					col_name = col_names[teller]
-					if col_name in doNotLoad_list:
-						# skip this property
-						pass
-					else:
-						if col_name == "datatype": setattr(dp,col_name,get_type(row[teller]))
-						elif col_name == "enabled": setattr(dp,col_name, bool(row[teller]))
-						elif col_name == "poll": setattr(dp,col_name, bool(row[teller]))
-						elif col_name == "dbstore": setattr(dp,col_name, bool(row[teller]))
-						elif col_name == "log_messages": setattr(dp,col_name, bool(row[teller]))
-						else: setattr(dp,col_names[teller],row[teller])
-				# make sure initial_value and last_value also have the correct datatype
-				if IsNot_NOE(dp.initial_value):
-					dp.initial_value = dp.datatype(dp.initial_value)
-				if IsNot_NOE(dp.last_value):
-					dp.last_value = dp.datatype(dp.last_value)
+				db_conn = sqlite3.connect(DBFILE, uri=True)
+				data = pd.read_sql_query(query, db_conn)
+			except sqlite3.Error as err:
+				Logger.exception(str(err))
+			finally:
+				db_conn.close()
+	
+		for teller, row in data.iterrows():
+			if dps != []:
+				# use an existing Datapoint object and fill the properties
+				dp = dps[teller]
+			else:
+				# create a new Datapoint object and fill the properties
+				dp = Datapoint()
+			for col_name in data.columns:
+				if col_name in doNotLoad_list: continue
+				# populate the properties
+				value = row[col_name]
+				if col_name == "datatype":
+					setattr(dp, col_name, get_type(value))
+				elif col_name == "enabled":
+					setattr(dp, col_name, bool(value))
+				elif col_name == "poll":
+					setattr(dp, col_name, bool(value))
+				elif col_name == "dbstore":
+					setattr(dp, col_name, bool(value))
+				elif col_name == "log_messages":
+					setattr(dp, col_name, bool(value))
+				else:
+					setattr(dp, col_name, value)
+			# make sure initial_value and last_value also have the correct datatype
+			if IsNot_NOE(dp.initial_value):
+				dp.initial_value = dp.datatype(dp.initial_value)
+			if IsNot_NOE(dp.last_value):
+				dp.last_value = dp.datatype(dp.last_value)
 				
-			except Exception as err:
-				Logger.error ("Error in loaddatapoints", str(err))
-			
 			DATAPOINTS_ID[dp.ID] = dp
 			DATAPOINTS_NAME[dp.name] = dp
-			dp_teller +=1
-		Logger.info("Loaded %s datapoints from the database.." % dp_teller)
+		Logger.info(f"Loaded {len(data)} datapoints from the database..")
 	except Exception as err:
-		if dp is not None: Logger.error ("%s--Error loading and setting properties" % dp.name)
-		Logger.exception (str(err))
-	finally:
-		CONN.close()
-	
-# def initialize_datapoints(dpIDs=[]):
-	# '''
-	# Initializes a list of datapoints, or if omitted ALL datapoints currently loaded in
-	# '''
-	
+		if dp is not None: Logger.error(f"{dp.name}--Error loading and setting properties")
+		Logger.exception(str(err))
 
 def load_and_configure_datapoints(dpIDs=[]):
 	from tqdm import tqdm

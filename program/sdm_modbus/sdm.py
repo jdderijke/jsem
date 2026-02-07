@@ -1,4 +1,4 @@
-from sdm_modbus import meter
+from program.sdm_modbus import meter
 
 
 class SDM(meter.Meter):

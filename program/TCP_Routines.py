@@ -6,7 +6,7 @@ if __name__ == "__main__":
 	__main__.backupcount = 2
 import os
 import sys
-from Config import DBFILE, TCPPORT, TCPHOST, MAX_EXTERNAL_CONN, DB_RETRIES, DB_WAITBETWEENRETRIES
+from Config import DBFILE, PORT, HOST, MAX_EXTERNAL_CONN, DB_RETRIES, DB_WAITBETWEENRETRIES
 import Common_Data
 from JSEM_Commons import get_ip_address
 from LogRoutines import Logger
@@ -48,8 +48,7 @@ To start the TCP server and start listening for TCP connections implement the fo
 		Logger.info("TCP-SQL Server proces started on address: %s, port: %s" % (found_address, found_tcpport))
 
 '''
-HOST = '192.168.178.220'	# The server's hostname or IP address
-PORT = 65432				# The port used by the server
+
 max_connections=2
 
 Conn_Counter = 0
@@ -136,7 +135,7 @@ def TCP_Handler(r_sock, r_addr):
 		if CONN is not None: CONN.close()
 		Conn_Counter = Conn_Counter - 1
 
-def TCPServer(host='127.0.0.1', port=65432, max_connections=2):
+def TCPServer(host='127.0.0.1', port=PORT, max_connections=max_connections):
 	'''
 	This routine continuously listens on the host IP adres, port for a n incoming connection request.
 	It will refuse any connection above the max_connections number.

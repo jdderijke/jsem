@@ -374,7 +374,8 @@ def Instellingen(DataCont:Container, ChartCont:VBox, my_app):
 			Logger.info("Reboot requested")
 			# only reboot on the raspberry Pi, not on the development system
 			if ENVIRONMENT == Environment.Productie:
-				os.kill(os.getpid(), signal.SIGUSR2)
+				signal.raise_signal(signal.SIGUSR2)
+				# os.kill(os.getpid(), signal.SIGUSR2)
 			else:
 				Logger.info("Reboot cancelled... this is not a production environment!..")
 
@@ -392,12 +393,8 @@ def Instellingen(DataCont:Container, ChartCont:VBox, my_app):
 	def stopappbutton_clicked(*args, **kwargs):
 		def confirm_clicked(*args, **kwargs):
 			Logger.info("Application stop requested")
-			my_app.close()
-			# print(my_app)
-			# waitkey()
-		
-		# Common_Data.MAIN_INSTANCE.close()
-			# os.kill(os.getpid(), signal.SIGUSR1)
+			signal.raise_signal(signal.SIGUSR1)
+			# my_app.close()
 			
 		def cancel_clicked(*args, **kwargs):
 			Logger.info("Application stop cancelled")

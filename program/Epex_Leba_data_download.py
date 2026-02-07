@@ -43,6 +43,7 @@ import pandas as pd
 from DB_Routines import get_df_from_database, store_df_in_database
 from datetime import date, datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
+from Datapoint_IDs import *
 import pytz
 # import locale
 
@@ -55,10 +56,7 @@ CWD=(os.path.dirname(os.path.realpath(__file__)))
 # url = "https://mijn.easyenergy.com/nl/api/tariff/getlebatariffs?startTimestamp=2020-04-29T22%3A00%3A00.000Z&endTimestamp=2020-04-30T22%3A00%3A00.000Z&includeVat=false"
 
 HEADERS = {'electricity': 'getapxtariffs', 'gas':'getlebatariffs'}
-PROVIDERS = ['easyenergy', 'energyzero']
-
-leba_data = 370
-epex_data = 214
+PROVIDERS = ['energyzero', 'easyenergy']
 
 def get_epex_leba_data	(
 						header="getapxtariffs", 

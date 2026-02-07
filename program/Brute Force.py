@@ -1,26 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
-#  Brute Force.py
-#  
-#  Copyright 2023  <pi@raspberrypi>
-#  
-#  This program is free software; you can redistribute it and/or modify
-#  it under the terms of the GNU General Public License as published by
-#  the Free Software Foundation; either version 2 of the License, or
-#  (at your option) any later version.
-#  
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#  
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software
-#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
-#  MA 02110-1301, USA.
-#  
 import time
+import pandas as pd
+
 
 # uur          1    2    3    4    5    6    7    8    9    10    11    12    13    14    15    16    17    18    19    20    21    22    23    24
 # epex_prijs = [9.0, 7.5, 8.3, 1.5, 1.0, 1.0, 3.0, 5.0, 7.0, 10.0, 12.0, 11.0, 13.0, 14.0, 20.0, 18.0, 17.0, 12.0, 11.0, 10.0, 14.0, 16.0, 14.0, 12.0]	# ct/Kwh
@@ -34,10 +16,10 @@ import time
 # buf_init = 5.0		# Kwh
 
 # Johan test set...
-hp_power = 16		# Kw
-hp_usage = 3.5		# Kw
+hp_power = 8.2		# Kw
+hp_usage = 2.5		# Kw
 buf_min = 3.0		# Kwh
-buf_max = 38.0		# Kwh
+buf_max = 20.0		# Kwh
 buf_init = 5.1		# Kwh
 # uur          0      1     2     3     4     5     6     7     8     9    10    11     12     13    14    15    16    17     18     19    20    21    22    23
 epex_prijs = [5.50, 4.38, 4.07, 3.99, 3.51, 4.02, 6.24, 8.12, 8.12, 6.24, 2.13, 0.00, -1.00, -1.14, 6.21, 8.21, 2.93, 7.94, 10.08, 11.62, 9.67, 8.25, 7.62, 6.49]
@@ -112,6 +94,54 @@ def clever_force():
 	result = dict(draaien=draaien, buf_cap=buf_cap, cost=cost)
 	return result
 
+def frans_force():
+	global epex_prijs, kwh_usage, hp_usage, hp_power
+	div = 6					# Number of steps per hour... i.e. 2 = every 30 minutes, 4 = every 15 minutes, 6 = every 10 minutes
+
+	# Logic to change the input dataset to match the number of steps per hour selected...
+	epex_prijs = [x for y in epex_prijs for x in [y]*div]
+	kwh_usage = [x for y in kwh_usage for x in [y / div]*div]
+	hp_power = hp_power / div
+	hp_usage = hp_usage / div
+	
+	# Initialize
+	max_periods = len(epex_prijs) - 1
+	hp_runs = [0] * len(epex_prijs)
+	hp_cost = [0.0] * len(epex_prijs)
+	buf_cap = [0.0] * len(epex_prijs)
+
+	period = 0						# The current active step/period
+	prev_buf_cap = buf_init			# buffer capacity at the end of the previous step/period
+	while period <= max_periods:
+		buf_cap[period] = round(prev_buf_cap - kwh_usage[period], 2)						# Calculate the new buffer capacity if we do not run the HP
+		if buf_cap[period] < buf_min:														# would this be sufficient?
+			# Nope... zoek nu terug wat de vroegste replenishment periode kan zijn
+			first_possible = period
+			while first_possible >= 0:
+				if buf_cap[first_possible] + hp_power > buf_max:
+					break
+				first_possible -= 1
+			# coming out of the while loop we have the last impossible, add 1 for the first possible
+			first_possible += 1
+			# Slice the epex list for the periods that allow a replenishment, and find the cheapest period
+			sub_list_epex = epex_prijs[first_possible:period + 1]
+			cheapest = sorted(range(len(sub_list_epex)), key=sub_list_epex.__getitem__)
+			for index_min in cheapest:
+				if hp_runs[first_possible + index_min] == 0:
+					hp_runs[first_possible + index_min] = 1
+					for teller in range(first_possible + index_min, period + 1):
+						buf_cap[teller] += hp_power
+					hp_cost[first_possible + index_min] = epex_prijs[first_possible + index_min] * hp_usage
+					break
+		prev_buf_cap = buf_cap[period]
+		period += 1
+	result = pd.DataFrame({'hp_runs': hp_runs, 'buf_cap':buf_cap, 'hp_cost': hp_cost})
+	return result
+	
+		
+			
+		
+
 def brute_force():
 	# Deze methode kost relatief veel processor tijd, bovendien wordt de duur van de berekening in principe verdubbeld 
 	# bij ieder extra uur wat vooruit gekeken moet worden..... Niet optimaal dus en een beetje bruut...
@@ -158,6 +188,20 @@ def brute_force():
 	
 
 def main(args):
+	pd.set_option('display.max_rows', 500)
+	
+	start=time.time()
+	result = frans_force()
+	print("frans_force() took %s s" % (time.time() - start))
+	print(result)
+	
+	print(f'Total cost: {result["hp_cost"].sum()}')
+	
+	starts = (result['hp_runs'] & (result['hp_runs'] != result['hp_runs'].shift(1))).sum()
+	print(f'Total starts: {starts}')
+	
+	
+	
 	# start=time.time()
 	# clever_result = clever_force()
 	# print("clever_force() took %s s" % (time.time() - start))
@@ -168,13 +212,13 @@ def main(args):
 	#
 	# input("Any key to continue...")
 	
-	start=time.time()
-	brute_result = brute_force()
-	print("brute_force() took %s s" % (time.time() - start))
-	for teller in range(len(epex_prijs)):
-		print ("Bruut___uur %s, gaat HP %s, buf_init = %s, cost = %s, cum_cost = %s" % 
-			(teller, 'AAN' if (brute_result[0] >> teller) & 1 == 1 else 'UIT', 
-			round(brute_result[2][teller],2), round(brute_result[1][teller], 2), round(sum(brute_result[1][0:teller+1]), 2)))
+	# start=time.time()
+	# brute_result = brute_force()
+	# print("brute_force() took %s s" % (time.time() - start))
+	# for teller in range(len(epex_prijs)):
+	# 	print ("Bruut___uur %s, gaat HP %s, buf_init = %s, cost = %s, cum_cost = %s" %
+	# 		(teller, 'AAN' if (brute_result[0] >> teller) & 1 == 1 else 'UIT',
+	# 		round(brute_result[2][teller],2), round(brute_result[1][teller], 2), round(sum(brute_result[1][0:teller+1]), 2)))
 	return 0
 
 if __name__ == '__main__':

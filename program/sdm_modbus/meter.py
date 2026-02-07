@@ -217,7 +217,7 @@ class Meter:
 				time.sleep(0.1)
 				continue
 				
-			return self.client.write_coil(address=address, value=value, slave=self.unit)
+			return self.client.write_coil(address=address, value=value, unit=self.unit)
 		
 		return None
 
@@ -227,8 +227,8 @@ class Meter:
 				self.connect()
 				time.sleep(0.1)
 				continue
-
-			return self.client.write_registers(address=address, values=value, slave=self.unit)
+			
+			return self.client.write_registers(address=address, values=value, unit=self.unit)
 		
 		return None
 

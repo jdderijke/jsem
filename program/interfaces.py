@@ -1388,7 +1388,7 @@ class ESMR50Interface(BaseInterface):
 			self.disconnect(reconnect=True)
 		except Exception as err:
 			Logger.exception ("%s--General Exception: %s" % (self.name,err))
-			self.disconnect(reconnect=False)
+			self.disconnect(reconnect=True)
 		finally:
 			# if we ever arrive here.... a disconnect has been requested...
 			self.recstate=Recstate.Receiver_Stopped
@@ -1436,28 +1436,16 @@ class ESMR50Interface(BaseInterface):
 			BA_databytes = None
 			result=re.finditer('\\(.+?\\)',STR_msg)
 			for match in result:
-				# ieder dataelement zit tussen 1 haakje en een haakje: 1-0:32.7.0(220.1*V)
-				# er zijn ook een aantal data elementen die meer dan 1 set haakjes bevatten: 0-1:24.2.1(101209112500W)(12785.123*m3)
-				# wij implementeren hier (voor nu) alleen de eerste waarde tussen ( en ) waar een * in voorkomt
-				# # check if this is last one
-				# if match.span()[1]==len(STR_msg):
-					# # remove brackets and strip unit from datapart
-					# data_str = match.group().replace('(','').replace(')','').split('*')[0]
-					# BA_databytes = bytearray(data_str.encode('utf-8'))
-					# # we have our valuedata, 
-					# break
-					# check if * character is present
-					if '*' in match.group():
-						# remove brackets and strip unit from datapart
-						data_str = match.group().replace('(','').replace(')','').split('*')[0]
-						BA_databytes = bytearray(data_str.encode('utf-8'))
-						# we have our valuedata, 
-						break
+				if '*' in match.group():
+					# remove brackets and strip unit from datapart
+					data_str = match.group().replace('(','').replace(')','').split('*')[0]
+					BA_databytes = bytearray(data_str.encode('utf-8'))
+					# we have our valuedata,
+					break
 					
-
 			if BA_databytes is None:
-				Logger.error("%s--Resetting interface. Error decoding, unable to isolate data: %s" % (self.name, BA_msg))
-				self.disconnect(reconnect=True)
+				Logger.error("%s--Error decoding, unable to isolate data: %s" % (self.name, BA_msg))
+				# self.disconnect(reconnect=True)
 				return
 
 			decoder = dp.datadecoder.strip() if IsNot_NOE(dp.datadecoder) else "ASCII"
@@ -1467,16 +1455,16 @@ class ESMR50Interface(BaseInterface):
 			# print(dp.name + "data received from datadecoder: " + str(result))
 			# force result into the correct datatype
 			if result is None:
-				Logger.error("%s--Resetting interface. Error decoding, from_ByteArray_converter %s returned None from databytes %s." % (self.name, decoder, BA_databytes))
-				self.disconnect(reconnect=True)
+				Logger.error("%s--Error decoding, from_ByteArray_converter %s returned None from databytes %s." % (self.name, decoder, BA_databytes))
+				# self.disconnect(reconnect=True)
 				return
 			
 			try:
 				dp.write_INTFC_value(nwvalue=dp.datatype(str(result))) 
 				# print (dp.name + ":" + str(dp.value))
 			except Exception as err:
-				Logger.error("%s--Resetting interface. Unable to convert %s to %s" % (self.name, result, dp.datatype))
-				self.disconnect(reconnect=True)
+				Logger.error("%s--Unable to convert %s to %s" % (self.name, result, dp.datatype))
+				# self.disconnect(reconnect=True)
 				return
 		except Exception as err:
 			Logger.exception(str(err))
