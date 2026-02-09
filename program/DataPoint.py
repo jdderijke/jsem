@@ -3,6 +3,8 @@ import time
 import re
 from collections import OrderedDict
 from datetime import datetime
+
+import pandas as pd
 import remi.gui as gui
 from remi.gui import *
 import json
@@ -276,7 +278,11 @@ class Datapoint(object):
 		
 		Further See the document: Functional specs PRESET and DB store and retrieve routines for datapoints.docx
 		'''
-		self.db_restore_last_value(use_values_table_if_needed=True)
+		self.db_restore_last_value(from_table='Datapoints', use_values_table_if_needed=True)
+		# if ENVIRONMENT == Environment.Productie:
+		# 	self.db_restore_last_value(from_table='Datapoints', use_values_table_if_needed=True)
+		# else:
+		# 	self.db_restore_last_value(from_table='Values')
 		
 		self.rebuild_dependencies()
 		
@@ -853,33 +859,31 @@ class Datapoint(object):
 			DB_Routines.store_field_in_database("Datapoints", self.ID, "last_value", self._value)
 			DB_Routines.store_field_in_database("Datapoints", self.ID, "last_timestamp", self._value_timestamp)
 		
-	def db_restore_last_value(self, use_values_table_if_needed=False):
+	def db_restore_last_value(self, from_table = 'Datapoints', use_values_table_if_needed=False):
 		'''
 		Restores the earlier stored last_value of this datapoint,...
 		'''
-		value = DB_Routines.get_field_from_database("Datapoints", self.ID, "last_value")
-		timestamp = DB_Routines.get_field_from_database("Datapoints", self.ID, "last_timestamp")
-		if timestamp is not None:
-			try:
-				self._value = self.datatype(value) if value!=None else None
-			except:
-				Logger.error(f'Datapoint (from Datapoints table last_value field) {self.ID}:{self.name} failed to cast last value: {value} into datatype: {self.datatype}')
-			self._value_timestamp = int(timestamp)
-		elif use_values_table_if_needed:
-			# If this failed because nothing was stored there.... then try the long process of retrieving it from the Values table
-			Logger.info('%s--Last value not found, trying Values table...' % self.name)
-			last_value,last_timestamp = DB_Routines.load_lastvalues(dpIDs=[self.ID])
-			if self.ID in last_value: 
-				value = last_value[self.ID]
-				timestamp = last_timestamp[self.ID]
+		if from_table == 'Datapoints':
+			value = DB_Routines.get_field_from_database("Datapoints", self.ID, "last_value")
+			timestamp = DB_Routines.get_field_from_database("Datapoints", self.ID, "last_timestamp")
+			if timestamp is not None and value is not None:
 				try:
 					self._value = self.datatype(value) if value!=None else None
 				except:
-					Logger.error(f'Datapoint (from Values table) {self.ID}:{self.name} failed to cast last value: {value} into datatype: {self.datatype}')
-				
+					Logger.error(f'Datapoint (from Datapoints table last_value field) {self.ID}:{self.name} failed to cast last value: {value} into datatype: {self.datatype}')
 				self._value_timestamp = int(timestamp)
+				return
 			else:
-				Logger.warning('%s--Could not retrieve last value' % self.name)
+				Logger.info(f'{self.name}--Last value not found in Datapoints table...')
+		
+		if from_table == 'Values' or use_values_table_if_needed:
+			# If this failed because nothing was stored there.... then try the long process of retrieving it from the Values table
+			last_val_df:pd.DataFrame = DB_Routines.load_lastvalues(dpIDs=[self.ID])
+			if not last_val_df.empty:
+				self._value = self.datatype(last_val_df.iloc[-1]['value'])
+				self._value_timestamp = int(last_val_df.iloc[-1]['timestamp'])
+			else:
+				Logger.warning(f'{self.name}--Last value not found in Values table...')
 		else:
 			Logger.warning('%s--Could not retrieve last value' % self.name)
 		

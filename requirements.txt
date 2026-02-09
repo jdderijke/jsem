@@ -40,3 +40,5 @@ websocket-client==1.8.0
 wsproto==1.2.0
 zeroconf==0.146.1
 zipp==3.21.0
+
+common-utils

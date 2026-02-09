@@ -78,9 +78,6 @@ meteofields = dict(
 def get_meteoserver_forecast(	location=None,
 								make_csv=True, 
 								store_in_db=False, 
-								use_remote_JSEM_DB=False, 
-								host=None, 
-								port=None,
 								**kwargs):
 
 	# check and read arguments
@@ -151,7 +148,7 @@ def get_meteoserver_forecast(	location=None,
 			tmp_df = tmp_df[['table','datapointID','timestamp',col]]
 			tmp_df = tmp_df.rename(columns={col:'value'})
 			
-			store_df_in_database(df=tmp_df, use_remote_JSEM_DB=use_remote_JSEM_DB, host=host, port=port)
+			store_df_in_database(df=tmp_df)
 		
 		Logger.info(f'Succesfully loaded {len(meteo_data)} records for {len(meteo_data.columns)-1} fields in the JSEM database...')
 		

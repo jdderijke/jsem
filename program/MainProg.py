@@ -1,13 +1,13 @@
-import pathlib
 import sys
 import __main__
 from Config import ENVIRONMENT
 from Common_Enums import Environment
 
 if ENVIRONMENT == Environment.Productie:
-	# print(sys.path)
-	sys.path.append('/home/jandirk/common_addons/common_addons')
-	sys.path.append('/home/jandirk/jsem/program/sdm_modbus')
+	if not '/home/jandirk/common_addons/common_addons' in sys.path:
+		sys.path.append('/home/jandirk/common_addons/common_addons')
+	if not '/home/jandirk/jsem/program/sdm_modbus' in sys.path:
+		sys.path.append('/home/jandirk/jsem/program/sdm_modbus')
 	# print(sys.path)
 	# input('any')
 
@@ -39,7 +39,7 @@ from Config import CWD, DBFILE, LOGFILELOCATION, Loglevel, ENVIRONMENT, DB_loopt
 import Common_Data
 from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, DB_STORE, JSEM_RULES
 from JSEM_Commons import expandcollapse, Calculate_Timerset
-from common_utils import get_extra_css, get_ip_address, Waitkey, get_seconds_untill
+from common_utils import get_extra_css, get_ip_address, Waitkey, get_seconds_untill_next
 import remi.gui as gui
 from remi.gui import *
 from remi import start, App
@@ -228,33 +228,34 @@ if __name__ == "__main__":
 	Logger.info ("Loading category definitions")
 	load_all_categories()
 
-	Logger.info ("Initializing Warmtepomp - WS172 H3")
-	SdmModbusInterface(name="Warmtepomp", auto_start=True)
+	if ENVIRONMENT == Environment.Productie:
+		Logger.info ("Initializing Warmtepomp - WS172 H3")
+		SdmModbusInterface(name="Warmtepomp", auto_start=True)
 
-	Logger.info ("Starting Zonnepanelen - Solis 3p5K-4g")
-	SdmModbusInterface(name="Solar", auto_start=True)
+		Logger.info ("Starting Zonnepanelen - Solis 3p5K-4g")
+		SdmModbusInterface(name="Solar", auto_start=True)
 
-	Logger.info ("Initializing Slimmemeter - ESMR 5.0")
-	ESMR50Interface(name="Slimmemeter", auto_start=True)
-	# ESMR50_via_TCP(name="Slimmemeter", auto_start=True, address='192.168.178.220', port=65432, conn_type="DEFAULT-TCP")
+		Logger.info ("Initializing Slimmemeter - ESMR 5.0")
+		ESMR50Interface(name="Slimmemeter", auto_start=True)
+		# ESMR50_via_TCP(name="Slimmemeter", auto_start=True, address='192.168.178.220', port=65432, conn_type="DEFAULT-TCP")
 
-	Logger.info ("Initializing Vermogensmeters - M_bus")
-	MbusInterface(name="Vermogensmeters", auto_start=True)
+		Logger.info ("Initializing Vermogensmeters - M_bus")
+		MbusInterface(name="Vermogensmeters", auto_start=True)
 
-	Logger.info ("Initializing laadpaal - Modbus")
-	SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
+		Logger.info ("Initializing laadpaal - Modbus")
+		SdmModbusInterface(name="Laadpaal", auto_start=True, awake_registername='max_current_setpoint', awake_interval=60)
 
-	Logger.info ("Initializing SDM72 verm meter - Modbus")
-	SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
-	#
-	Logger.info ("Initializing Zwembadpomp - Shelly")
-	ShellyRelayInterface(name="Zwembadpomp", device_count=3, auto_start=True)
+		Logger.info ("Initializing SDM72 verm meter - Modbus")
+		SdmModbusInterface(name="Verm_meter_WP", auto_start=True)
+		#
+		Logger.info ("Initializing Zwembadpomp - Shelly")
+		ShellyRelayInterface(name="Zwembadpomp", device_count=3, auto_start=True)
 
-	# Logger.info ("Initializing Vloervoelers - Modbus")
-	# SdmModbusInterface(name="Vloer", auto_start=True)
-	
-	Logger.info ("Initializing Woning voelers - Modbus")
-	SdmModbusInterface(name="Woning", auto_start=True)
+		# Logger.info ("Initializing Vloervoelers - Modbus")
+		# SdmModbusInterface(name="Vloer", auto_start=True)
+
+		Logger.info ("Initializing Woning voelers - Modbus")
+		SdmModbusInterface(name="Woning", auto_start=True)
 
 	Logger.info ("Loading datapoints definitions")
 	load_and_configure_datapoints()
@@ -263,107 +264,109 @@ if __name__ == "__main__":
 		Logger.info ("%s-- Has %s subscribed datapoints, %s polling datapoints and %s searchkeys.." %
 					 (interf.name, len(interf.dpids), len(interf.pollQ), len(interf.searchkeys)))
 
-	# Start the TCP SQL server to enable remote access to the database
-	# Now first retrieve some network addresses....
-	found_address='127.0.0.1'
-	found_tcpport=65432 if PORT == 0 else PORT
-	if HOST=='':
-		try:
-			found_address = get_ip_address()
-		except:
-			Logger.error ("Can't retrieve IP address and none given in config.py file, using localhost 127.0.0.1....")
-	else:
-		found_address = HOST
 		
-	if ENVIRONMENT == Environment.Productie and MAX_EXTERNAL_CONN > 0:
-		# Here I start a parallel thread that executes the TCP server
-		t = threading.Thread(target=TCPServer, kwargs=dict(host=found_address, port=found_tcpport, max_connections=MAX_EXTERNAL_CONN))
-		t.daemon = True
-		t.start()
-		Logger.info("TCP-SQL Server proces started on address: %s, port: %s" % (found_address, found_tcpport))
+	if ENVIRONMENT == Environment.Productie:
+		if MAX_EXTERNAL_CONN > 0:
+			# Start the TCP SQL server to enable remote access to the database
+			# Now first retrieve some network addresses....
+			found_address='127.0.0.1'
+			found_tcpport=65432 if PORT == 0 else PORT
+			if HOST=='':
+				try:
+					found_address = get_ip_address()
+				except:
+					Logger.error ("Can't retrieve IP address and none given in config.py file, using localhost 127.0.0.1....")
+			else:
+				found_address = HOST
+			# Here I start a parallel thread that executes the TCP server
+			t = threading.Thread(target=TCPServer,
+								 kwargs=dict(host=found_address, port=found_tcpport, max_connections=MAX_EXTERNAL_CONN))
+			t.daemon = True
+			t.start()
+			Logger.info("TCP-SQL Server proces started on address: %s, port: %s" % (found_address, found_tcpport))
+		
+		
+		# start the optimizer 30sec after the next hour and then every hour (3600s)
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="Warmtepomp optimalisatie algoritme",
+									rule=JSEM_Rules.optimizer,
+									# interval=60,
+									interval=3600,
+									startup_delay= get_seconds_untill_next('hour') + 30,
+									start=True)
+									)
+		#
+		#start the execution of the strategy every minute
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="Warmtepomp strategie 1",
+									rule=JSEM_Rules.warmtepomp_strat_1,
+									interval=60,
+									startup_delay=30,
+									start=True)
+									)
+		#
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="EPEX data downloader",
+									rule=JSEM_Rules.get_epex_data,
+									interval=24*3600,
+									startup_delay= get_seconds_untill_next(untill_time='16:00:00'),
+									start=True)
+									)
+		#
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="LEBA data downloader",
+									rule=JSEM_Rules.get_leba_data,
+									interval=24*3600,
+									startup_delay= get_seconds_untill_next(untill_time='22:00:00'),
+									start=True)
+									)
+		#
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="Weather forecast",
+									rule=JSEM_Rules.get_weather_frcst,
+									interval=24*3600,
+									startup_delay= get_seconds_untill_next(untill_time='23:45:00'),
+									start=True)
+									)
 
-	# start the optimizer on the next hour and then every hour
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="Warmtepomp optimalisatie algoritme",
-								rule=JSEM_Rules.optimizer,
-								# interval=60,
-								interval=3600,
-								startup_delay= 3600 - int(datetime.now().timestamp()) % 3600 + 30,		# 30 seconden na het hele uur
-								# startup_delay= 60,
-								start=True)
-								)
-	#
-	#start the execution of the strategy every minute
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="Warmtepomp strategie 1",
-								rule=JSEM_Rules.warmtepomp_strat_1,
-								interval=60,
-								startup_delay=30,
-								start=True)
-								)
-	#
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="EPEX data downloader",
-								rule=JSEM_Rules.get_epex_data,
-								interval=24*3600,
-								startup_delay= get_seconds_untill(untill_time='16:00:00'),
-								start=True)
-								)
-	#
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="LEBA data downloader",
-								rule=JSEM_Rules.get_leba_data,
-								interval=24*3600,
-								startup_delay= get_seconds_untill(untill_time='22:00:00'),
-								start=True)
-								)
-	#
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="Weather forecast",
-								rule=JSEM_Rules.get_weather_frcst,
-								interval=24*3600,
-								startup_delay= get_seconds_untill(untill_time='23:45:00'),
-								start=True)
-								)
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="laadpaal_rule_1",
+									rule=JSEM_Rules.laadpaal_rule_1,
+									interval=30,
+									startup_delay=45,
+									start=True)
+									)
+		#
 
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="laadpaal_rule_1",
-								rule=JSEM_Rules.laadpaal_rule_1,
-								interval=30,
-								startup_delay=45,
-								start=True)
-								)
-	#
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="zwembad_rule_1",
+									rule=JSEM_Rules.zwembad_rule_1,
+									interval=60,
+									startup_delay=30,
+									start=True)
+									)
+		#
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="solar_rule_1",
+									rule=JSEM_Rules.solar_rule_1,
+									interval=60,
+									startup_delay=30,
+									start=True)
+									)
+		#
+		Common_Data.JSEM_RULES.append(
+									JSEM_Rule(name="load_balance_rule",
+									rule=JSEM_Rules.load_balance_rule,
+									interval=5,
+									startup_delay=30,
+									start=True)
+									)
 
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="zwembad_rule_1",
-								rule=JSEM_Rules.zwembad_rule_1,
-								interval=60,
-								startup_delay=30,
-								start=True)
-								)
-	#
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="solar_rule_1",
-								rule=JSEM_Rules.solar_rule_1,
-								interval=60,
-								startup_delay=30,
-								start=True)
-								)
-	#
-	Common_Data.JSEM_RULES.append(
-								JSEM_Rule(name="load_balance_rule",
-								rule=JSEM_Rules.load_balance_rule,
-								interval=5,
-								startup_delay=30,
-								start=True)
-								)
-
-	# Set up s timer to automatically force a reboot every night
-	timerset = get_seconds_untill(untill_time=Reboot_time)
-	Logger.info (f"Setting up automatic reboot, at {Reboot_time}, timer set for {timerset} seconds")
-	reboot_timer = threading.Timer(timerset, reboot_callback)
-	reboot_timer.start()
+		# Set up s timer to automatically force a reboot every night
+		timerset = get_seconds_untill_next(untill_time=Reboot_time)
+		Logger.info (f"Setting up automatic reboot, at {Reboot_time}, timer set for {timerset} seconds")
+		reboot_timer = threading.Timer(timerset, reboot_callback)
+		reboot_timer.start()
 
 	
 	

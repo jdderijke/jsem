@@ -16,8 +16,11 @@ Loglevel = logging.INFO
 
 # System settings
 # ENVIRONMENT = Environment.Productie
-# ENVIRONMENT = Environment.Test_full
-ENVIRONMENT = Environment.Test_data
+# ENVIRONMENT = Environment.Testing
+ENVIRONMENT = Environment.Development
+# Use the remote JSEM database for all database transactions, this feature is used in testing...
+USE_REMOTE_DB_READ = False
+USE_REMOTE_DB_WRITE = False
 
 BTW_PERC = 21
 
@@ -31,8 +34,6 @@ PORT = 65432
 # IP address to use, if None or empty then system local IP address will be used, see log file at startup for used IP address.
 # TCPHOST = "192.168.4.1"
 HOST = "192.168.178.220"
-# Use the remote JSEM database for all database transactions, this feature is used in testing...
-USE_REMOTE_JSEM_DB = False
 
 
 # Current Working Directory... define the path to the directory of the running script... (which is not always pathlib.Path.cwd())
@@ -174,8 +175,16 @@ Chart_Definitions=		{
 								"max_y_rows": 24,
 								"x_col_labels": [],
 								"y_row_labels": []
-								}
+								},
+	
+						"table": {
+							"ctype": "table",
+							"title": "Tabel",
+							"aggr": "Not",
+							"joinwith": []
 						}
+	
+}
 
 # Define the best strftime format for the x-axis of the charts
 Best_dtFormat = {DataSelection._10min:'%H:%M:%S', 

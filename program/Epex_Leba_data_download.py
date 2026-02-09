@@ -65,10 +65,7 @@ def get_epex_leba_data	(
 						end_date=datetime.now(), 
 						incl_vat=False, 
 						make_csv=True, 
-						store_in_db=True, 
-						use_remote_JSEM_DB=False, 
-						host=None, 
-						port=None
+						store_in_db=True
 						):
 	try:
 		if header == HEADERS['electricity']:

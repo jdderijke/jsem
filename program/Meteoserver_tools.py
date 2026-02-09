@@ -47,7 +47,7 @@ from DB_Routines import get_df_from_database, store_df_in_database
 from Datapoint_IDs import *
 
 				
-def update_meteo_fields(meteofields={}, csv_path=CWD + "*.csv", use_remote_JSEM_DB=False, host='', port=0):
+def update_meteo_fields(meteofields={}, csv_path=CWD + "*.csv"):
 	'''
 	Reads and loads all meteofiles from the meteoserver_dir that fit the criterium
 	Keeps only the LATEST forecast for a specific timestamp (hour).
@@ -97,7 +97,7 @@ def update_meteo_fields(meteofields={}, csv_path=CWD + "*.csv", use_remote_JSEM_
 		tmp_df = tmp_df[['table','datapointID','timestamp',col]]
 		tmp_df = tmp_df.rename(columns={col:'value'})
 		
-		store_df_in_database(df=tmp_df, use_remote_JSEM_DB=use_remote_JSEM_DB, host=host, port=port)
+		store_df_in_database(df=tmp_df)
 	
 	Logger.info(f'Succesfully loaded {len(meteo_data)} records for {len(meteo_data.columns)-1} fields in the JSEM database...')
 
@@ -117,11 +117,6 @@ meteofields = dict(
 					icoon=(frcst_icoon, 'string'))
 
 
-# HOST = '192.168.178.220'	# The server's hostname or IP address
-# PORT = 65432				# The port used by the server
-HOST = ''					# The server's hostname or IP address
-PORT = 0					# The port used by the server
-REMOTE_JSEM_DB = False
 
 def main(args):
 	print(update_meteo_fields.__doc__)
@@ -131,14 +126,11 @@ def main(args):
 	print()
 	print('If this field definition is not OK... stop this program and edit the meteofields dictionary first...')
 	print()
-	print(f'Program is set to run on remote_JSEM_database: {REMOTE_JSEM_DB}')
-	print()
 	print()
 	input('any key, or cntrl C to quit')
 	
-	Logger.info(f'Running update_meteo_fields program: remote JSEM db:{REMOTE_JSEM_DB}, host:{HOST}, port:{PORT}')
 	Logger.info(f'Running update_meteo_fields program: meteofields:{meteofields}')
-	update_meteo_fields(meteofields=meteofields, csv_path=meteofiles, use_remote_JSEM_DB=REMOTE_JSEM_DB, host=HOST, port=PORT)
+	update_meteo_fields(meteofields=meteofields, csv_path=meteofiles)
 	return 0
 
 if __name__ == '__main__':

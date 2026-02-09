@@ -39,7 +39,7 @@ from JSEM_Commons import cursor_to_dict
 import sqlite3
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from DB_Routines import get_value_from_database, get_valueseries_from_database, store_value_in_database, get_df_from_database
+from DB_Routines import get_value_from_database, store_value_in_database
 
 CWD=(os.path.dirname(os.path.realpath(__file__)))
 DBFILE = "/Database/JSEM.db"

@@ -21,6 +21,8 @@ from remi.gui import *
 from remi import start, App
 import pygal 
 from pygal import Config
+
+from program.Tiles import LineTile, TableTile
 from pygal_extras import LineBar
 from pygal.style import Style
 from DB_Routines import get_values_from_database, get_df_from_database
@@ -1173,15 +1175,15 @@ class JSEM_Bar_Chart(JSEM_GUI, Svg):
 										)
 		# Allow all dataselections here
 		self.allowed_dataselections={
-									DataSelection._1hr:DatabaseGrouping.Tenmin, 
-									DataSelection._2hr:DatabaseGrouping.Tenmin,
-									DataSelection._6hr:DatabaseGrouping.Tenmin,
-									DataSelection._12hr:DatabaseGrouping.Hour, 
+									DataSelection._1hr:DatabaseGrouping._1min,
+									DataSelection._2hr:DatabaseGrouping._15min,
+									DataSelection._6hr:DatabaseGrouping._15min,
+									DataSelection._12hr:DatabaseGrouping._15min,
 									DataSelection._24hr:DatabaseGrouping.Hour, 
 									DataSelection._48hr:DatabaseGrouping.Hour,
 									DataSelection._72hr: DatabaseGrouping.Hour,
 									DataSelection._96hr:DatabaseGrouping.Hour,
-									# DataSelection.Hour:DatabaseGrouping.Tenmin,
+									# DataSelection.Hour:DatabaseGrouping._10min,
 									DataSelection.Day:DatabaseGrouping.Hour, 
 									DataSelection.Week:DatabaseGrouping.Day, 
 									DataSelection.Month:DatabaseGrouping.Day, 
@@ -1728,7 +1730,7 @@ class JSEM_ChartCont(JSEM_GUI, VBox):
 			expandcollapse(Common_Data.DATA_PARENT_CONTAINER, Common_Data.CHARTS_PARENT_CONTAINER)
 
 
-	def chart_selection_changed(self, calling_widget=None, ctype=None, *args, **kwargs):
+	def chart_selection_changed(self, calling_widget=None, ctype=None):
 		
 		if calling_widget:
 			# we zijn hier terecht gekomen via een chart_selection dropdown list... er is dus nu al een chart
@@ -1766,7 +1768,7 @@ class JSEM_ChartCont(JSEM_GUI, VBox):
 			
 		
 
-		if self.chartinfo['ctype'] == 'line': 
+		if self.chartinfo['ctype'] == 'line':
 			self.chart = JSEM_Line_Chart(parent=self, datapoints=self.datapoints, chartinfo=self.chartinfo, height="92%",
 											dataselection=dataselection, selecteddate=selecteddate)
 		elif self.chartinfo['ctype'] == 'bar': 
@@ -1775,6 +1777,20 @@ class JSEM_ChartCont(JSEM_GUI, VBox):
 		elif self.chartinfo['ctype'] == 'map': 
 			self.chart = JSEM_Map_Chart(parent=self, datapoints=self.datapoints, chartinfo=self.chartinfo, height="80%",
 											dataselection=dataselection, selecteddate=selecteddate)
+		elif self.chartinfo['ctype'] == 'table':
+			result_df = get_df_from_database(
+											dpIDs=[self.datapoints[0].ID],
+											dataselection = dataselection,
+											datagrouping = DatabaseGrouping._15min,
+											aggregation = Aggregation[self.chartinfo['aggr']],
+											dataselection_date = selecteddate,
+											maxrows = 100,
+											add_datetime_column = True
+											)
+			result_df = result_df[['datetime', self.datapoints[0].name]]
+			self.chart = TableTile(table_data=result_df, close_button=True)
+			self.append(self.chart)
+			self.chart.on_close.connect(lambda *args, **kwargs: self.get_parent().remove_child(self))
 		else:
 			Logger.error("%s-- Can not create chart, illegal type: %s" % (self.refdp.name, self.chartinfo))
 		# Because of the VBox add widgets in the correct order chart_cont VBox (or use the css-order property)
@@ -2070,7 +2086,9 @@ class JSEM_Label(JSEM_GUI, HBox):
 		# Widget specific update logic.....
 		if self.value_lbl:
 			# print(f'Label text updated with {self.value}') 
-			self.value_lbl.set_text(str(self.value)) 
+			self.value_lbl.set_text(str(self.value))
+		if self.ckbox_lbl:
+			self.ckbox_lbl.set_value(checked=(self.value==1))
 
 
 		
@@ -2085,7 +2103,7 @@ class JSEM_Label(JSEM_GUI, HBox):
 		charts_parent = Common_Data.CHARTS_PARENT_CONTAINER
 		data_parent = Common_Data.DATA_PARENT_CONTAINER
 		main_cont = Common_Data.MAIN_CONTAINER
-		# check if this JSEM label already has an chart running, if so...close it
+		# check if this JSEM label already has a chart running, if so...close it
 		if self.chart_cont:
 			self.chart_cont.close()
 			

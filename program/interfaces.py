@@ -19,7 +19,7 @@ from DataPoint import Datapoint
 from LogRoutines import Logger
 from DB_Routines import populate_interface, get_pollmessages_from_database
 from JSEM_Commons import get_ip_address, Is_NOE, IsNot_NOE, dump, Waitkey, string_builder, Calculate_Timerset, spincursor
-from Common_Data import DATAPOINTS_ID, DATAPOINTS_NAME, CATEGORY_ID, CATEGORY_NAME
+from Common_Data import DATAPOINTS_ID
 import remi.gui as gui
 import errno
 

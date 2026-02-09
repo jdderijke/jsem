@@ -182,8 +182,7 @@ The server will start listening on that address/port and wait for incoming SQL r
 
 
 def tcp_sql_query(query=None, host=HOST, port=PORT):
-	# print ('Receiving query in tcp_sql_client:')
-	# print (query)
+	# Logger.debug('Receiving query in tcp_sql_client: {query}')
 	result = None
 	stats = None
 	while True:
@@ -193,10 +192,9 @@ def tcp_sql_query(query=None, host=HOST, port=PORT):
 				s.connect((host, port))
 
 				sendbytes = query.encode('utf-8')
-				# print('Bytesstream to send:')
-				# print(sendbytes)
+				# Logger.debug(f'Bytes stream to send: /n{sendbytes}')
 				s.sendall(sendbytes)
-				# print('Bytesstream is send...')
+				# Logger.debug('Bytes stream send...')
 
 				# first get the result of the query in a dataframe (None for INSERT or UPDATE queries)
 				data = b""
@@ -204,13 +202,14 @@ def tcp_sql_query(query=None, host=HOST, port=PORT):
 					packet = s.recv(4096)
 					if not packet: break
 					data += packet
-				# print('Answer received from TCP-SQL host....')
-				# print(data)
+				# Logger.debug('Answer received from TCP-SQL host:..../n{data}')
 				result, stats = pickle.loads(data)
 				break
-				# print(stats)
+				# Logger.debug(f'stats from server:.../n{stats}')
+		except EOFError as err:
+			pass
 		except Exception as err:
-			print(str(err))
+			Logger.exception(str(err))
 
 	return result, stats
 
@@ -248,7 +247,7 @@ Enter a SELECT or INSERT query...or hit RETURN to transmit a test dataframe to u
 								'value':[10.0,-10.0,10.0,-10.0,10.0]
 								}
 				df = pd.DataFrame(test_df)
-				result, stats = store_df_in_database(df=df, use_remote_JSEM_DB=True)
+				result, stats = store_df_in_database(df=df)
 				print(result)
 			else:
 				result, stats = tcp_sql_query(query=query, host=HOST, port=PORT)

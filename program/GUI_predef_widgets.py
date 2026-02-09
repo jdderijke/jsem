@@ -422,9 +422,9 @@ class Hp_widget(Container):
 			cool_ind.type='img'
 			cool_ind.attributes['src']=Load_Images('cooling')
 			
-			thrm_ind = JSEM_Label(status, dps[sl_temp_corr], config=lbl_config, style=lbl_style, top='10%', left='25%', width='35%', height='80%',
+			roomtemp_act_ind = JSEM_Label(status, dps[roomtemp_act], config=lbl_config, style=lbl_style, top='20%', left='25%', width='35%', height='60%',
 									value_font_weight='bold', value_font_size='1.5em')
-						
+			
 			hp_ind = gui.Label(text='hp', style=f'position:absolute;top:25%;left:65%;width:10%;height:25%;font-size:0.7em;background:green;'
 									 f'visibility:{"hidden" if (dps[mode_verwarmen].value=="4: uit") else "visible"}')
 			hp_ind.refresh = lambda dp:hp_ind.set_style(f'visibility:{"hidden" if (dp.value=="4: uit") else "visible"}')
